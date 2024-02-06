@@ -1,0 +1,3 @@
+[submodule "usbx"]
+	path = usbx
+	url = https://github.com/eclipse-threadx/usbx.git
