@@ -13,6 +13,15 @@ USBX_DIR = $(CURDIR)/usbx
 USBX_SRCS = \
 	$(wildcard $(USBX_DIR)/common/core/src/ux_host_stack_*.c) \
 	$(wildcard $(USBX_DIR)/common/usbx_host_classes/src/ux_host_class_hub_*.c) \
+	$(wildcard $(USBX_DIR)/common/usbx_host_classes/src/ux_host_class_cdc_acm_*.c) \
+	$(wildcard $(USBX_DIR)/common/usbx_host_classes/src/ux_host_class_gser_*.c) \
+	$(wildcard $(USBX_DIR)/common/usbx_host_classes/src/ux_host_class_hid_*.c) \
+	$(wildcard $(USBX_DIR)/common/usbx_host_classes/src/ux_host_class_pima_*.c) \
+	$(wildcard $(USBX_DIR)/common/usbx_host_classes/src/ux_host_class_printer_*.c) \
+	$(wildcard $(USBX_DIR)/common/usbx_host_classes/src/ux_host_class_prolific_*.c) \
+	$(wildcard $(USBX_DIR)/common/usbx_host_classes/src/ux_host_class_storage_*.c) \
+	$(wildcard $(USBX_DIR)/common/usbx_host_classes/src/ux_host_class_swar_*.c) \
+	$(wildcard $(USBX_DIR)/common/usbx_host_classes/src/ux_host_class_video_*.c) \
 	$(wildcard $(USBX_DIR)/common/core/src/ux_system_*.c) \
 	$(wildcard $(USBX_DIR)/common/core/src/ux_trace_*.c) \
 	$(filter-out $(USBX_DIR)/common/core/src/ux_utility_physical_address.c $(USBX_DIR)/common/core/src/ux_utility_virtual_address.c, $(wildcard $(USBX_DIR)/common/core/src/ux_utility_*.c)) \
@@ -31,6 +40,7 @@ USBX_FLAGS = \
 	-DUX_ENABLE_ASSERT \
 	-DUX_INCLUDE_USER_DEFINE_FILE \
 	-DUX_ENABLE_MEMORY_STATISTICS \
+	-DUX_HOST_CLASS_STORAGE_NO_FILEX
 
 CFLAGS += \
 	-Og \

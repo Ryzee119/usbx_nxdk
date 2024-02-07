@@ -257,6 +257,7 @@ VOID _tx_thread_relinquish(VOID)
     SwitchToThread();
 }
 
+/* Only used in some test code; implemented so it compiles */
 UINT _tx_thread_terminate(TX_THREAD *thread_ptr)
 {
     UX_ASSERT(0);
@@ -280,14 +281,26 @@ UINT _tx_thread_delete(TX_THREAD *thread_ptr)
    so probably should implement them. nxdk winapi wrapper doesnt have them yet. */
 UINT _tx_thread_resume(TX_THREAD *thread_ptr)
 {
-    UX_ASSERT(0);
-    return TX_FEATURE_NOT_ENABLED;
+    //FIXME, use a winapi function instead of xboxkrnl NT function
+    NTSTATUS status = NtResumeThread(thread_ptr->thread, NULL);
+    if (NT_SUCCESS(status)) {
+        thread_ptr->tx_thread_state = TX_READY;
+        return TX_SUCCESS;
+    } else {
+        return TX_RESUME_ERROR;
+    }
 }
 
 UINT _tx_thread_suspend(TX_THREAD *thread_ptr)
 {
-    UX_ASSERT(0);
-    return TX_FEATURE_NOT_ENABLED;
+    //FIXME, use a winapi function instead of xboxkrnl NT function
+    NTSTATUS status = NtSuspendThread(thread_ptr->thread, NULL);
+    if (NT_SUCCESS(status)) {
+        thread_ptr->tx_thread_state = TX_SUSPENDED;
+        return TX_SUCCESS;
+    } else {
+        return TX_RESUME_ERROR;
+    }
 }
 
 UINT _tx_thread_info_get(TX_THREAD *thread_ptr, CHAR **name, UINT *state, ULONG *run_count,
