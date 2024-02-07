@@ -26,7 +26,7 @@ USBX_SRCS = \
 	$(wildcard $(USBX_DIR)/common/core/src/ux_trace_*.c) \
 	$(filter-out $(USBX_DIR)/common/core/src/ux_utility_physical_address.c $(USBX_DIR)/common/core/src/ux_utility_virtual_address.c, $(wildcard $(USBX_DIR)/common/core/src/ux_utility_*.c)) \
 	$(wildcard $(USBX_DIR)/common/usbx_host_controllers/src/ux_hcd_ohci_*.c) \
-	usbx_glue/threadx/glue.c
+	threadx_glue/glue.c
 
 USBX_FLAGS = \
 	-I$(USBX_DIR)/ports/generic/inc \
@@ -34,7 +34,7 @@ USBX_FLAGS = \
 	-I$(USBX_DIR)/common/usbx_host_classes/inc \
 	-I$(USBX_DIR)/common/usbx_host_controllers/inc \
 	-I$(CURDIR)/usbx_glue \
-	-I$(CURDIR)/usbx_glue/threadx \
+	-I$(CURDIR)/threadx_glue \
 	-DUX_HOST_SIDE_ONLY \
 	-DUX_ENABLE_ERROR_CHECKING \
 	-DUX_ENABLE_ASSERT \
