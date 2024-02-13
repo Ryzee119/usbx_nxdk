@@ -3,12 +3,7 @@ GEN_XISO = $(XBE_TITLE).iso
 SRCS = $(CURDIR)/main.c
 
 USBX_DIR = $(CURDIR)/usbx
-
-# $(wildcard $(USBX_DIR)/common/usbx_host_classes/src/*.c)
-# -I$(USBX_DIR)/common/usbx_host_classes/inc
-# -DUX_STANDALONE
-# -DUX_ENABLE_DEBUG_LOG
-# -DUX_ENABLE_EVENT_TRACE
+NETX_DIR = $(CURDIR)/netxduo
 
 USBX_SRCS = \
 	$(wildcard $(USBX_DIR)/common/core/src/ux_host_stack_*.c) \
@@ -39,19 +34,40 @@ USBX_FLAGS = \
 	-DUX_ENABLE_ERROR_CHECKING \
 	-DUX_ENABLE_ASSERT \
 	-DUX_INCLUDE_USER_DEFINE_FILE \
+	-DTX_INCLUDE_USER_DEFINE_FILE \
 	-DUX_ENABLE_MEMORY_STATISTICS \
 	-DUX_HOST_CLASS_STORAGE_NO_FILEX
+
+NETX_SRCS = \
+	$(wildcard $(NETX_DIR)/addons/*/*.c) \
+	$(wildcard $(NETX_DIR)/common/src/*.c) \
+	$(wildcard $(NETX_DIR)/crypto_libraries/src/*.c) \
+	$(wildcard $(NETX_DIR)/nx_secure/src/*.c) \
+	$(wildcard $(NETX_DIR)/tsn/src/*.c) \
+
+NETX_FLAGS = \
+	-I$(NETX_DIR)/common/inc \
+	-I$(NETX_DIR)/crypto_libraries/inc \
+	-I$(NETX_DIR)/crypto_libraries/ports/win32/vs_2019/inc \
+	-I$(NETX_DIR)/nx_secure/inc \
+	-I$(NETX_DIR)/nx_secure/ports \
+	-I$(NETX_DIR)/ports/win32/vs_2019/inc \
+	-I$(NETX_DIR)/tsn/inc \
+	-DTX_INCLUDE_USER_DEFINE_FILE
 
 CFLAGS += \
 	-Og \
 	-DDEBUG_CONSOLE \
 	-Wno-builtin-macro-redefined \
 	-Wno-implicit-function-declaration \
-	$(USBX_FLAGS)
+	$(USBX_FLAGS) \
+	$(NETX_FLAGS)
 
 SRCS += \
 	main.c \
-	$(USBX_SRCS)
+	nx_nvnet_network_driver.c \
+	$(USBX_SRCS) \
+	$(NETX_SRCS)
 
 NXDK_DIR ?= $(CURDIR)/../..
 

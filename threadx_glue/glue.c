@@ -1,19 +1,26 @@
 #include "ux_api.h"
 #include "tx_event_flags.h"
 #include "tx_thread.h"
+#include "tx_port.h"
 #include <windows.h>
+
+TX_THREAD _tx_timer_thread;
+// Hmm do we need this running and doing something? timeouts?
+// https://github.com/eclipse-threadx/threadx/blob/master/common_smp/src/tx_timer_thread_entry.c#L76
+volatile UINT _tx_thread_preempt_disable = 0;
+volatile ULONG _tx_thread_system_state = TX_INITIALIZE_IS_FINISHED;
 
 #define TX_MUTEX_ID 0x4D555445UL
 #define TX_SEMAPHORE_ID ((ULONG)0x53454D41)
 
 VOID *_ux_utility_physical_address(VOID *virtual_address)
 {
-    return (virtual_address) ? ((VOID *)MmGetPhysicalAddress(virtual_address)) : UX_NULL;
+    return (virtual_address) ? ((VOID *)MmGetPhysicalAddress(virtual_address)) : TX_NULL;
 }
 
 VOID *_ux_utility_virtual_address(VOID *physical_address)
 {
-    return (physical_address) ? (VOID *)((uintptr_t)physical_address | 0x80000000) : UX_NULL;
+    return (physical_address) ? (VOID *)((uintptr_t)physical_address | 0x80000000) : TX_NULL;
 }
 
 /* Not sure what the win32 equivalent of these event flags is. It is like 32 event objects in one using bitmasks
@@ -21,6 +28,7 @@ VOID *_ux_utility_virtual_address(VOID *physical_address)
    until the bit mask is satisfied or times out */
 UINT _tx_event_flags_create(TX_EVENT_FLAGS_GROUP *group_ptr, CHAR *name_ptr)
 {
+    TX_MEMSET(group_ptr, 0, (sizeof(TX_EVENT_FLAGS_GROUP)));
     group_ptr->tx_event_flags_group_id = TX_EVENT_FLAGS_ID;
     group_ptr->tx_event_flags_group_name = name_ptr;
     group_ptr->tx_event_flags_group_current = 0;
@@ -100,7 +108,9 @@ UINT _tx_event_flags_set(TX_EVENT_FLAGS_GROUP *group_ptr, ULONG flags_to_set, UI
 UINT _tx_mutex_create(TX_MUTEX *mutex_ptr, CHAR *name_ptr, UINT inherit)
 {
     UX_ASSERT(inherit == TX_NO_INHERIT);
+    TX_MEMSET(mutex_ptr, 0, (sizeof(TX_MUTEX)));
     mutex_ptr->mutex = CreateMutexA(NULL, FALSE, name_ptr);
+    mutex_ptr->tx_mutex_name = name_ptr;
     mutex_ptr->tx_mutex_id = TX_MUTEX_ID;
     return TX_SUCCESS;
 }
@@ -143,6 +153,7 @@ UINT _tx_mutex_get(TX_MUTEX *mutex_ptr, ULONG wait_option)
 
 UINT _tx_semaphore_create(TX_SEMAPHORE *semaphore_ptr, CHAR *name_ptr, ULONG initial_count)
 {
+    TX_MEMSET(semaphore_ptr, 0, (sizeof(TX_SEMAPHORE)));
     semaphore_ptr->semaphore = CreateSemaphore(NULL, initial_count, 4096, name_ptr);
     semaphore_ptr->tx_semaphore_id = TX_SEMAPHORE_ID;
     semaphore_ptr->tx_semaphore_count = initial_count;
@@ -207,7 +218,7 @@ TX_THREAD *_tx_thread_identify(VOID)
     }
 
     UX_ASSERT(0);
-    return UX_NULL;
+    return TX_NULL;
 }
 
 UINT _tx_thread_sleep(ULONG timer_ticks)
@@ -241,13 +252,25 @@ UINT _tx_thread_create(TX_THREAD *thread_ptr, CHAR *name_ptr, VOID (*entry_funct
     (void)preempt_threshold;
     (void)time_slice;
     (void)priority;
+    TX_MEMSET(thread_ptr, 0, (sizeof(TX_THREAD)));
+
     thread_ptr->tx_thread_entry = entry_function;
     thread_ptr->tx_thread_entry_parameter = entry_input;
     thread_ptr->tx_thread_name = name_ptr;
     thread_ptr->tx_thread_state = (auto_start) ? TX_READY : TX_SUSPENDED;
     thread_ptr->tx_thread_id = TX_THREAD_ID;
-    thread_ptr->thread = CreateThread(NULL, UX_MAX(PAGE_SIZE, stack_size), thread_entry, thread_ptr,
+    thread_ptr->thread = CreateThread(NULL, PAGE_SIZE, thread_entry, thread_ptr,
                                       (auto_start) ? 0 : CREATE_SUSPENDED, &thread_ptr->win32_thread_id);
+
+    // netx uses stack limits to check for variable thread ownership. We can use the stack base and limit to get the same effect
+    PETHREAD ethread;
+    if (ObReferenceObjectByHandle(thread_ptr->thread, &PsThreadObjectType, (PVOID *)&ethread) == STATUS_SUCCESS)
+    {
+        PKTHREAD current_thread = &ethread->Tcb;
+        thread_ptr->tx_thread_stack_start = current_thread->StackLimit;
+        thread_ptr->tx_thread_stack_end = current_thread->StackBase;
+    }
+
     InsertTailList(&thread_list_head, &thread_ptr->entry);
     return TX_SUCCESS;
 }
@@ -281,24 +304,33 @@ UINT _tx_thread_delete(TX_THREAD *thread_ptr)
    so probably should implement them. nxdk winapi wrapper doesnt have them yet. */
 UINT _tx_thread_resume(TX_THREAD *thread_ptr)
 {
-    //FIXME, use a winapi function instead of xboxkrnl NT function
+    // FIXME, use a winapi function instead of xboxkrnl NT function
     NTSTATUS status = NtResumeThread(thread_ptr->thread, NULL);
-    if (NT_SUCCESS(status)) {
+    if (NT_SUCCESS(status))
+    {
         thread_ptr->tx_thread_state = TX_READY;
+        thread_ptr->tx_thread_suspending = TX_FALSE;
         return TX_SUCCESS;
-    } else {
+    }
+    else
+    {
         return TX_RESUME_ERROR;
     }
 }
 
 UINT _tx_thread_suspend(TX_THREAD *thread_ptr)
 {
-    //FIXME, use a winapi function instead of xboxkrnl NT function
+    // FIXME, use a winapi function instead of xboxkrnl NT function
+    thread_ptr->tx_thread_suspending = TX_TRUE;
     NTSTATUS status = NtSuspendThread(thread_ptr->thread, NULL);
-    if (NT_SUCCESS(status)) {
+    if (NT_SUCCESS(status))
+    {
         thread_ptr->tx_thread_state = TX_SUSPENDED;
+        thread_ptr->tx_thread_suspending = TX_FALSE;
         return TX_SUCCESS;
-    } else {
+    }
+    else
+    {
         return TX_RESUME_ERROR;
     }
 }
@@ -320,9 +352,9 @@ UINT _tx_thread_info_get(TX_THREAD *thread_ptr, CHAR **name, UINT *state, ULONG 
     if (time_slice)
         *time_slice = 0;
     if (next_thread)
-        *next_thread = UX_NULL;
+        *next_thread = TX_NULL;
     if (next_suspended_thread)
-        *next_suspended_thread = UX_NULL;
+        *next_suspended_thread = TX_NULL;
     return TX_SUCCESS;
 }
 
@@ -346,4 +378,45 @@ UINT _tx_timer_delete(TX_TIMER *timer_ptr)
 {
     UX_ASSERT(0);
     return TX_FEATURE_NOT_ENABLED;
+}
+
+UINT _tx_thread_preemption_change(TX_THREAD *thread_ptr, UINT new_threshold, UINT *old_threshold)
+{
+    (void)thread_ptr;
+    (void)new_threshold;
+    (void)old_threshold;
+    return TX_SUCCESS;
+}
+
+/* How is this different from _tx_thread_resume */
+VOID _tx_thread_system_resume(TX_THREAD *thread_ptr)
+{
+    _tx_thread_resume(thread_ptr);
+    return;
+}
+
+/* How is this different from _tx_thread_system_suspend */
+VOID _tx_thread_system_suspend(TX_THREAD *thread_ptr)
+{
+    _tx_thread_suspend(thread_ptr);
+    return;
+
+}
+
+VOID _tx_thread_system_preempt_check(VOID)
+{
+    return;
+}
+
+UINT  _tx_timer_deactivate(TX_TIMER *timer_ptr)
+{
+    UX_ASSERT(0);
+    (void)timer_ptr;
+    return TX_SUCCESS;
+
+}
+
+ULONG  _tx_time_get(VOID)
+{
+    return GetTickCount();
 }
