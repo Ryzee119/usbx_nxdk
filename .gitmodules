@@ -1,6 +1,3 @@
 [submodule "usbx"]
 	path = usbx
 	url = https://github.com/eclipse-threadx/usbx.git
-[submodule "netxduo"]
-	path = netxduo
-	url = https://github.com/eclipse-threadx/netxduo.git

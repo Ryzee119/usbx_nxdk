@@ -2,6 +2,9 @@
 
 #include <windows.h>
 
+#define TX_DISABLE_PREEMPTION_THRESHOLD
+#define TX_TIMER_TICKS_PER_SECOND 1000
+
 typedef struct TX_EVENT_FLAGS_GROUP_STRUCT
 {
     char *tx_event_flags_group_name;
@@ -64,7 +67,6 @@ UINT _tx_thread_interrupt_disable(void);
 void _tx_thread_interrupt_restore(UINT old_posture);
 #define TX_INTERRUPT_SAVE_AREA UINT interrupt_save;
 #define TX_DISABLE interrupt_save = _tx_thread_interrupt_disable();
-
 #define TX_RESTORE _tx_thread_interrupt_restore(interrupt_save);
 #define _tx_thread_current_ptr _tx_thread_identify()
 

@@ -78,7 +78,7 @@ int main(void)
     ULONG irqc, vector;
     KIRQL irql;
 
-    XVideoSetMode(1280, 720, 16, REFRESH_DEFAULT);
+    XVideoSetMode(720, 480, 16, REFRESH_DEFAULT);
 
     irqc = 1; // Or 9 for other OHCI controller
     vector = HalGetInterruptVector(irqc, &irql);
