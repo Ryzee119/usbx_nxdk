@@ -46,7 +46,7 @@
 static inline void ux_test_assert_hit(char *file, int line)
 {
     DbgPrint("Assertion failed at %s:%d\n", file, line);
-    RtlAssert((PVOID)0, (PVOID)file, line, "ASSERTION FAILED");
+    RtlAssert((PVOID)0, (PVOID)file, line, (PCHAR)"ASSERTION FAILED");
 }
 
 #define UX_ASSERT_FAIL ux_test_assert_hit(__FILE__, __LINE__);

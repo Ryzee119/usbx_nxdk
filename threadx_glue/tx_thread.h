@@ -5,10 +5,7 @@
 #define THREAD_DECLARE extern
 
 THREAD_DECLARE TX_THREAD *_tx_thread_current_ptr;
-
 THREAD_DECLARE volatile ULONG _tx_thread_system_state;
-
-// FIXME; actualy stop preempt threads
 THREAD_DECLARE volatile UINT _tx_thread_preempt_disable;
 
 VOID _tx_thread_system_resume(TX_THREAD *thread_ptr);

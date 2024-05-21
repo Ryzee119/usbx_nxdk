@@ -2,7 +2,7 @@ XBE_TITLE = usbx
 GEN_XISO = $(XBE_TITLE).iso
 SRCS = $(CURDIR)/main.c
 
-USBX_DIR = $(CURDIR)/usbx
+USBX_DIR = $(CURDIR)/lib/usb/usbx
 
 USBX_SRCS = \
 	$(wildcard $(USBX_DIR)/common/core/src/ux_host_stack_*.c) \
@@ -20,9 +20,12 @@ USBX_SRCS = \
 	$(wildcard $(USBX_DIR)/common/core/src/ux_trace_*.c) \
 	$(wildcard $(USBX_DIR)/common/usbx_host_controllers/src/ux_hcd_ohci_*.c) \
 	$(filter-out $(USBX_DIR)/common/core/src/ux_utility_physical_address.c $(USBX_DIR)/common/core/src/ux_utility_virtual_address.c, $(wildcard $(USBX_DIR)/common/core/src/ux_utility_*.c)) \
-	threadx_glue/glue.c
+	threadx_glue/glue.c \
+	lib/nxdk/usb.c
 
 USBX_FLAGS = \
+	-I$(CURDIR)/lib \
+	-I$(CURDIR)/lib/usb \
 	-I$(USBX_DIR)/ports/generic/inc \
 	-I$(USBX_DIR)/common/core/inc \
 	-I$(USBX_DIR)/common/usbx_host_classes/inc \
@@ -43,6 +46,10 @@ CFLAGS += \
 	-Wno-builtin-macro-redefined \
 	-Wno-implicit-function-declaration \
 	$(USBX_FLAGS) \
+	-Wall -Wextra -Wpedantic \
+          -Wformat=2 -Wno-unused-parameter -Wshadow \
+          -Wwrite-strings -Wstrict-prototypes -Wold-style-definition \
+          -Wredundant-decls -Wnested-externs -Wmissing-include-dirs
 
 SRCS += \
 	main.c \
