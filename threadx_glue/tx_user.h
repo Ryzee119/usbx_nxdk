@@ -46,6 +46,7 @@ struct semaphorex
 {
     HANDLE semaphore;
     ULONG tx_semaphore_id;
+    CHAR *tx_semaphore_name;
     ULONG tx_semaphore_count;
 };
 

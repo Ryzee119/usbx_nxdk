@@ -4,7 +4,7 @@
 #define TX_THREAD_ID ((ULONG)0x54485244)
 #define THREAD_DECLARE extern
 
-THREAD_DECLARE TX_THREAD *_tx_thread_current_ptr;
+
 THREAD_DECLARE volatile ULONG _tx_thread_system_state;
 THREAD_DECLARE volatile UINT _tx_thread_preempt_disable;
 

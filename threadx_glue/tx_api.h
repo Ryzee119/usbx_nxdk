@@ -8,6 +8,7 @@ extern "C"
 
 #include "tx_user.h"
 #include "ux_user.h"
+#include "tx_port.h"
 
 #ifndef ALIGN_TYPE_DEFINED
 #define ALIGN_TYPE ULONG

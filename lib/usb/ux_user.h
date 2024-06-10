@@ -6,6 +6,9 @@
 #include "tx_user.h"
 #endif
 
+#define UX_PERIODIC_RATE TX_TIMER_TICKS_PER_SECOND
+#define UX_CONTROL_TRANSFER_TIMEOUT 5000
+
 #ifndef UX_MAX_HCD
 // Only retail OHCI controller
 #define UX_MAX_HCD 1
@@ -35,11 +38,11 @@
 
 // Maximum number of isochronous transfers to endpoints.
 #ifndef UX_MAX_ISO_TD
-// Isochronous transfers; allow for 4 headsets with 2 endpoints each (mic + speaker)
-#define UX_MAX_ISO_TD 8
+// Isochronous transfers; allow for 4 headsets with 2 endpoints each double buffered (mic + speaker)
+#define UX_MAX_ISO_TD 16
 #endif
 
-// WinAPI allocates its on stack for each thread. Set this a low as possible
+// WinAPI allocates its own stack for each thread. Set this a low as possible
 // to prevent the USB stack allocating excessive thread stack memory itself
 #define UX_THREAD_STACK_SIZE 1
 

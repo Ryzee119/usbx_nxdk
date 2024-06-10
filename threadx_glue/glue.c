@@ -1,9 +1,11 @@
 #include "ux_api.h"
+#include "tx_api.h"
 #include "tx_event_flags.h"
 #include "tx_thread.h"
-// #include "tx_port.h"
 #include <windows.h>
 #include <assert.h>
+
+// https://web.archive.org/web/20170304103512/http://soft.laogu.com/down/ThreadXUserGuide.pdf
 
 TX_THREAD _tx_timer_thread;
 // Hmm do we need this running and doing something? timeouts?
@@ -18,12 +20,6 @@ volatile ULONG _tx_thread_system_state = TX_INITIALIZE_IS_FINISHED;
  * I just use a manual bitmask wrapped in critical sections to make it thread safe. The get function polls and yields
  its thread until the bit mask is satisfied or times out */
 UINT _tx_event_flags_create(TX_EVENT_FLAGS_GROUP *group_ptr, CHAR *name_ptr) {
-#ifndef TX_DISABLE_ERROR_CHECKING
-    if (group_ptr == NULL || group_ptr->tx_event_flags_group_id == TX_EVENT_FLAGS_ID) {
-        return TX_GROUP_ERROR;
-    }
-#endif
-
     memset(group_ptr, 0, (sizeof(TX_EVENT_FLAGS_GROUP)));
     group_ptr->tx_event_flags_group_id = TX_EVENT_FLAGS_ID;
     group_ptr->tx_event_flags_group_name = name_ptr;
@@ -34,12 +30,6 @@ UINT _tx_event_flags_create(TX_EVENT_FLAGS_GROUP *group_ptr, CHAR *name_ptr) {
 }
 
 UINT _tx_event_flags_delete(TX_EVENT_FLAGS_GROUP *group_ptr) {
-#ifndef TX_DISABLE_ERROR_CHECKING
-    if (group_ptr == NULL) {
-        return TX_GROUP_ERROR;
-    }
-#endif
-
     group_ptr->tx_event_flags_group_id = TX_CLEAR_ID;
     DeleteCriticalSection(&group_ptr->c);
 
@@ -56,16 +46,6 @@ UINT _tx_event_flags_get(TX_EVENT_FLAGS_GROUP *group_ptr, ULONG requested_flags,
     if (requested_flags == 0) {
         return TX_SUCCESS;
     }
-
-#ifndef TX_DISABLE_ERROR_CHECKING
-    if (actual_flags_ptr == NULL) {
-        return TX_PTR_ERROR;
-    }
-
-    if (group_ptr == NULL || group_ptr->tx_event_flags_group_id != TX_EVENT_FLAGS_ID) {
-        return TX_GROUP_ERROR;
-    }
-#endif
 
     if (wait_option == TX_NO_WAIT) {
         timeout = GetTickCount();
@@ -111,15 +91,6 @@ UINT _tx_event_flags_get(TX_EVENT_FLAGS_GROUP *group_ptr, ULONG requested_flags,
 }
 
 UINT _tx_event_flags_set(TX_EVENT_FLAGS_GROUP *group_ptr, ULONG flags_to_set, UINT set_option) {
-#ifndef TX_DISABLE_ERROR_CHECKING
-    if (group_ptr == NULL) {
-        return TX_GROUP_ERROR;
-    }
-
-    if (set_option != TX_OR && set_option != TX_AND) {
-        return TX_OPTION_ERROR;
-    }
-#endif
     EnterCriticalSection(&group_ptr->c);
     if (set_option == TX_OR) {
         group_ptr->tx_event_flags_group_current |= flags_to_set;
@@ -132,13 +103,13 @@ UINT _tx_event_flags_set(TX_EVENT_FLAGS_GROUP *group_ptr, ULONG flags_to_set, UI
 
 UINT _tx_mutex_create(TX_MUTEX *mutex_ptr, CHAR *name_ptr, UINT inherit) {
     assert(inherit == TX_NO_INHERIT);
-    memset(mutex_ptr, 0, (sizeof(TX_MUTEX)));
-    mutex_ptr->mutex = CreateMutexA(NULL, FALSE, name_ptr);
+    mutex_ptr->mutex = CreateMutex(NULL, FALSE, NULL);
     if (mutex_ptr->mutex == NULL) {
         return TX_MUTEX_ERROR;
     }
     mutex_ptr->tx_mutex_name = name_ptr;
     mutex_ptr->tx_mutex_id = TX_MUTEX_ID;
+    mutex_ptr->tx_mutex_ownership_count = 0;
     return TX_SUCCESS;
 }
 
@@ -178,9 +149,10 @@ UINT _tx_mutex_get(TX_MUTEX *mutex_ptr, ULONG wait_option) {
 }
 
 UINT _tx_semaphore_create(TX_SEMAPHORE *semaphore_ptr, CHAR *name_ptr, ULONG initial_count) {
-    memset(semaphore_ptr, 0, (sizeof(TX_SEMAPHORE)));
-    semaphore_ptr->semaphore = CreateSemaphore(NULL, initial_count, 4096, name_ptr);
+    semaphore_ptr->semaphore = CreateSemaphore(NULL, initial_count, 4096, NULL);
     if (semaphore_ptr->semaphore == NULL) {
+        semaphore_ptr->tx_semaphore_id = TX_CLEAR_ID;
+        semaphore_ptr->tx_semaphore_name = name_ptr;
         return TX_SEMAPHORE_ERROR;
     }
     semaphore_ptr->tx_semaphore_id = TX_SEMAPHORE_ID;
@@ -205,9 +177,9 @@ UINT _tx_semaphore_get(TX_SEMAPHORE *semaphore_ptr, ULONG wait_option) {
     }
 
     waitResult = WaitForSingleObject(semaphore_ptr->semaphore, wait_option);
-    semaphore_ptr->tx_semaphore_count--;
 
     if (waitResult == WAIT_OBJECT_0) {
+        semaphore_ptr->tx_semaphore_count--;
         return TX_SUCCESS;
     } else if (waitResult == WAIT_TIMEOUT) {
         return TX_NO_INSTANCE;
@@ -218,8 +190,8 @@ UINT _tx_semaphore_get(TX_SEMAPHORE *semaphore_ptr, ULONG wait_option) {
 
 UINT _tx_semaphore_put(TX_SEMAPHORE *semaphore_ptr) {
     UINT status = TX_NOT_DONE;
-    status = (ReleaseSemaphore(semaphore_ptr->semaphore, 1, NULL) == 0) ? TX_SEMAPHORE_ERROR : TX_SUCCESS;
     semaphore_ptr->tx_semaphore_count++;
+    status = (ReleaseSemaphore(semaphore_ptr->semaphore, 1, NULL) == 0) ? TX_SEMAPHORE_ERROR : TX_SUCCESS;
     return status;
 }
 
@@ -239,7 +211,6 @@ TX_THREAD *_tx_thread_identify(VOID) {
         entry = entry->Flink;
     }
 
-    assert(0);
     return TX_NULL;
 }
 
@@ -255,6 +226,7 @@ void _tx_thread_interrupt_restore(UINT old_posture) { KfLowerIrql(old_posture); 
 static DWORD WINAPI thread_entry(LPVOID lpParameter) {
     TX_THREAD *thread_ptr = (TX_THREAD *)lpParameter;
     thread_ptr->tx_thread_entry(thread_ptr->tx_thread_entry_parameter);
+    thread_ptr->tx_thread_state = TX_COMPLETED;
     return 0;
 }
 
@@ -263,7 +235,6 @@ UINT _tx_thread_create(TX_THREAD *thread_ptr, CHAR *name_ptr, VOID (*entry_funct
                        UINT auto_start) {
     (void)preempt_threshold;
     (void)time_slice;
-    (void)priority;
     memset(thread_ptr, 0, (sizeof(TX_THREAD)));
 
     thread_ptr->tx_thread_entry = entry_function;
@@ -273,6 +244,15 @@ UINT _tx_thread_create(TX_THREAD *thread_ptr, CHAR *name_ptr, VOID (*entry_funct
     thread_ptr->tx_thread_id = TX_THREAD_ID;
     thread_ptr->thread = CreateThread(NULL, PAGE_SIZE, thread_entry, thread_ptr, (auto_start) ? 0 : CREATE_SUSPENDED,
                                       &thread_ptr->win32_thread_id);
+
+    // Rough priority mapping. Might be important for preemption assumptions in threadx
+    int win_priority = THREAD_PRIORITY_NORMAL;
+    if (priority > TX_MAX_PRIORITIES / 2) {
+        win_priority = THREAD_PRIORITY_ABOVE_NORMAL;
+    } else if (priority < TX_MAX_PRIORITIES / 2) {
+        win_priority = THREAD_PRIOIRTY_BELOW_NORMAL;
+    }
+    SetThreadPriority(thread_ptr->thread, win_priority);
 
     // ThreadX compares a variables memory location with a threads stack memory to determine ownership in certain cases.
     // We can use the stack base and limit to get the same effect
@@ -290,15 +270,13 @@ UINT _tx_thread_create(TX_THREAD *thread_ptr, CHAR *name_ptr, VOID (*entry_funct
 VOID _tx_thread_relinquish(VOID) { SwitchToThread(); }
 
 UINT _tx_thread_terminate(TX_THREAD *thread_ptr) {
-    assert(0);
+    // Can't terminate threads on xbox. Best we can do is suspend.
+    _tx_thread_suspend(thread_ptr);
     return TX_FEATURE_NOT_ENABLED;
 }
 
 UINT _tx_thread_delete(TX_THREAD *thread_ptr) {
-    DWORD waitResult = WaitForSingleObject(thread_ptr->thread, 100);
-    if (waitResult != WAIT_OBJECT_0) {
-        return TX_DELETE_ERROR;
-    }
+    WaitForSingleObject(thread_ptr->thread, 10);
     thread_ptr->tx_thread_id = TX_CLEAR_ID;
     CloseHandle(thread_ptr->thread);
     RemoveEntryList(&thread_ptr->entry);
@@ -333,6 +311,9 @@ UINT _tx_thread_suspend(TX_THREAD *thread_ptr) {
 UINT _tx_thread_info_get(TX_THREAD *thread_ptr, CHAR **name, UINT *state, ULONG *run_count, UINT *priority,
                          UINT *preemption_threshold, ULONG *time_slice, TX_THREAD **next_thread,
                          TX_THREAD **next_suspended_thread) {
+    if (thread_ptr == NULL) {
+        return TX_NO_INSTANCE;
+    }
     if (name)
         *name = thread_ptr->tx_thread_name;
     if (state)
