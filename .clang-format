@@ -1,38 +1,21 @@
----
-Language: Cpp
-BasedOnStyle: LLVM
-IndentWidth: 4
-TabWidth: 4
-UseTab: Never
-BreakBeforeBraces: Attach
-AllowShortIfStatementsOnASingleLine: false
-AllowShortLoopsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: All
+BasedOnStyle: Microsoft
+ColumnLimit: 0
 IndentCaseLabels: true
-ColumnLimit: 120
-SortIncludes: false
-IndentPPDirectives: AfterHash
-SpaceBeforeParens: ControlStatements
-SpaceAfterCStyleCast: false
-SpacesInParentheses: false
-SpacesInSquareBrackets: false
-SpacesInAngles: false
-SpacesInContainerLiterals: false
-PointerAlignment: Right
-DerivePointerAlignment: false
-AlignAfterOpenBracket: Align
-AlignOperands: true
 AlignTrailingComments: true
-KeepEmptyLinesAtTheStartOfBlocks: false
-AlwaysBreakTemplateDeclarations: Yes
-BinPackParameters: true
-BinPackArguments: true
-PenaltyBreakBeforeFirstCallParameter: 19
-PenaltyBreakComment: 300
-PenaltyBreakString: 1000
-PenaltyExcessCharacter: 1000000
-PenaltyReturnTypeOnItsOwnLine: 60
-FixNamespaceComments: true
-NamespaceIndentation: None
-Cpp11BracedListStyle: true
-AllowShortBlocksOnASingleLine: false
+AlignConsecutiveMacros: true
+InsertBraces: true
+
+SpaceBeforeParens: Custom
+SpaceBeforeParensOptions:
+  AfterControlStatements: true
+  AfterFunctionDefinitionName: true
+  AfterFunctionDeclarationName: true
+
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterControlStatement: false
+  AfterExternBlock: false
+  BeforeElse: false
+  AfterUnion: true
+
+TypeNames: [VOID, PVOID, LPVOID]

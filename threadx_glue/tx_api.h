@@ -2,13 +2,12 @@
 #define TX_API_H
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
+#include "tx_port.h"
 #include "tx_user.h"
 #include "ux_user.h"
-#include "tx_port.h"
 
 #ifndef ALIGN_TYPE_DEFINED
 #define ALIGN_TYPE ULONG
@@ -124,46 +123,40 @@ extern "C"
 #define TX_INITIALIZE_IS_FINISHED ((ULONG)0x00000000UL)
 #define TX_THREAD_GET_SYSTEM_STATE() TX_INITIALIZE_IS_FINISHED
 
-TX_THREAD *_tx_thread_identify(VOID);
-UINT _tx_thread_sleep(ULONG timer_ticks);
-UINT _tx_event_flags_set(TX_EVENT_FLAGS_GROUP *group_ptr, ULONG flags_to_set,
-                            UINT set_option);
-UINT _tx_event_flags_delete(TX_EVENT_FLAGS_GROUP *group_ptr);
-UINT _tx_event_flags_create(TX_EVENT_FLAGS_GROUP *group_ptr, CHAR *name_ptr);
-UINT _tx_event_flags_get(TX_EVENT_FLAGS_GROUP *group_ptr, ULONG requested_flags,
-                            UINT get_option, ULONG *actual_flags_ptr, ULONG wait_option);
-UINT _tx_mutex_create(TX_MUTEX *mutex_ptr, CHAR *name_ptr, UINT inherit);
-UINT _tx_mutex_delete(TX_MUTEX *mutex_ptr);
-UINT _tx_mutex_get(TX_MUTEX *mutex_ptr, ULONG wait_option);
-UINT _tx_mutex_put(TX_MUTEX *mutex_ptr);
+TX_THREAD *_tx_thread_identify (VOID);
+UINT _tx_thread_sleep (ULONG timer_ticks);
+UINT _tx_event_flags_set (TX_EVENT_FLAGS_GROUP *group_ptr, ULONG flags_to_set, UINT set_option);
+UINT _tx_event_flags_delete (TX_EVENT_FLAGS_GROUP *group_ptr);
+UINT _tx_event_flags_create (TX_EVENT_FLAGS_GROUP *group_ptr, CHAR *name_ptr);
+UINT _tx_event_flags_get (TX_EVENT_FLAGS_GROUP *group_ptr, ULONG requested_flags, UINT get_option,
+                          ULONG *actual_flags_ptr, ULONG wait_option);
+UINT _tx_mutex_create (TX_MUTEX *mutex_ptr, CHAR *name_ptr, UINT inherit);
+UINT _tx_mutex_delete (TX_MUTEX *mutex_ptr);
+UINT _tx_mutex_get (TX_MUTEX *mutex_ptr, ULONG wait_option);
+UINT _tx_mutex_put (TX_MUTEX *mutex_ptr);
 
-UINT _tx_semaphore_create(TX_SEMAPHORE *semaphore_ptr, CHAR *name_ptr, ULONG initial_count);
-UINT _tx_semaphore_delete(TX_SEMAPHORE *semaphore_ptr);
-UINT _tx_semaphore_get(TX_SEMAPHORE *semaphore_ptr, ULONG wait_option);
-UINT _tx_semaphore_put(TX_SEMAPHORE *semaphore_ptr);
+UINT _tx_semaphore_create (TX_SEMAPHORE *semaphore_ptr, CHAR *name_ptr, ULONG initial_count);
+UINT _tx_semaphore_delete (TX_SEMAPHORE *semaphore_ptr);
+UINT _tx_semaphore_get (TX_SEMAPHORE *semaphore_ptr, ULONG wait_option);
+UINT _tx_semaphore_put (TX_SEMAPHORE *semaphore_ptr);
 
-UINT _tx_thread_create(TX_THREAD *thread_ptr, CHAR *name_ptr,
-                        VOID (*entry_function)(ULONG entry_input), ULONG entry_input,
-                        VOID *stack_start, ULONG stack_size,
-                        UINT priority, UINT preempt_threshold,
+UINT _tx_thread_create (TX_THREAD *thread_ptr, CHAR *name_ptr, VOID (*entry_function)(ULONG entry_input),
+                        ULONG entry_input, VOID *stack_start, ULONG stack_size, UINT priority, UINT preempt_threshold,
                         ULONG time_slice, UINT auto_start);
-UINT _tx_thread_delete(TX_THREAD *thread_ptr);
-UINT _tx_thread_info_get(TX_THREAD *thread_ptr, CHAR **name, UINT *state, ULONG *run_count,
-                            UINT *priority, UINT *preemption_threshold, ULONG *time_slice,
-                            TX_THREAD **next_thread, TX_THREAD **next_suspended_thread);
-UINT _tx_thread_priority_change(TX_THREAD *thread_ptr, UINT new_priority,
-                                UINT *old_priority);
-VOID _tx_thread_relinquish(VOID);
-UINT _tx_thread_resume(TX_THREAD *thread_ptr);
-UINT _tx_thread_suspend(TX_THREAD *thread_ptr);
-UINT _tx_thread_terminate(TX_THREAD *thread_ptr);
+UINT _tx_thread_delete (TX_THREAD *thread_ptr);
+UINT _tx_thread_info_get (TX_THREAD *thread_ptr, CHAR **name, UINT *state, ULONG *run_count, UINT *priority,
+                          UINT *preemption_threshold, ULONG *time_slice, TX_THREAD **next_thread,
+                          TX_THREAD **next_suspended_thread);
+UINT _tx_thread_priority_change (TX_THREAD *thread_ptr, UINT new_priority, UINT *old_priority);
+VOID _tx_thread_relinquish (VOID);
+UINT _tx_thread_resume (TX_THREAD *thread_ptr);
+UINT _tx_thread_suspend (TX_THREAD *thread_ptr);
+UINT _tx_thread_terminate (TX_THREAD *thread_ptr);
 
-UINT _tx_timer_create(TX_TIMER *timer_ptr, CHAR *name_ptr,
-                        VOID (*expiration_function)(ULONG input), ULONG expiration_input,
-                        ULONG initial_ticks, ULONG reschedule_ticks, UINT auto_activate);
-UINT _tx_timer_delete(TX_TIMER *timer_ptr);
-UINT _tx_thread_preemption_change(TX_THREAD *thread_ptr, UINT new_threshold,
-                                    UINT *old_threshold);
+UINT _tx_timer_create (TX_TIMER *timer_ptr, CHAR *name_ptr, VOID (*expiration_function)(ULONG input),
+                       ULONG expiration_input, ULONG initial_ticks, ULONG reschedule_ticks, UINT auto_activate);
+UINT _tx_timer_delete (TX_TIMER *timer_ptr);
+UINT _tx_thread_preemption_change (TX_THREAD *thread_ptr, UINT new_threshold, UINT *old_threshold);
 #ifdef __cplusplus
 }
 #endif

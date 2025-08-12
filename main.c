@@ -1,16 +1,19 @@
+#include <assert.h>
 #include <hal/debug.h>
 #include <hal/video.h>
 #include <nxdk/usb.h>
 #include <windows.h>
-#include <assert.h>
 #include <winusb.h>
 
 #undef printf
 #define printf DbgPrint
 
-const char *get_error_string(int error_code);
+DWORD WINAPI ohci_print (void *param);
 
-static void host_change_function(ULONG change_code, UX_HOST_CLASS *ux_class, VOID *param) {
+const char *get_error_string (int error_code);
+
+static void host_change_function (ULONG change_code, UX_HOST_CLASS *ux_class, VOID *param)
+{
     switch (change_code) {
         case UX_DEVICE_INSERTION:
             // printf("USB device inserted\r\n");
@@ -35,13 +38,15 @@ static void host_change_function(ULONG change_code, UX_HOST_CLASS *ux_class, VOI
     return;
 }
 
-int main(void) {
+int main (void)
+{
     XVideoSetMode(640, 480, 16, REFRESH_DEFAULT);
 
     debugPrint("%s\n", _ux_version_id);
     nxUsbInit();
     nxUsbRegisterChangeCallback(host_change_function);
 
+    CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE) ohci_print, NULL, 0, NULL);
     match_interface_class_t xid_interface = {0x58, 0x42, 0x00};
 
     nx_usb_device_t usb_device;
@@ -215,9 +220,179 @@ int main(void) {
 }
 
 #ifdef UX_HOST_STANDALONE
-ULONG _tx_time_get(VOID) { return GetTickCount(); }
+ULONG _tx_time_get (VOID)
+{
+    return GetTickCount();
+}
 
-UINT _tx_thread_interrupt_disable(void) { return KeRaiseIrqlToDpcLevel(); }
+UINT _tx_thread_interrupt_disable (void)
+{
+    return KeRaiseIrqlToDpcLevel();
+}
 
-void _tx_thread_interrupt_restore(UINT old_posture) { KfLowerIrql(old_posture); }
+void _tx_thread_interrupt_restore (UINT old_posture)
+{
+    KfLowerIrql(old_posture);
+}
 #endif
+
+typedef volatile struct
+{
+    uint32_t revision;
+
+    union
+    {
+        uint32_t control;
+        struct
+        {
+            uint32_t control_bulk_service_ratio : 2;
+            uint32_t periodic_list_enable : 1;
+            uint32_t isochronous_enable : 1;
+            uint32_t control_list_enable : 1;
+            uint32_t bulk_list_enable : 1;
+            uint32_t hc_functional_state : 2;
+            uint32_t interrupt_routing : 1;
+            uint32_t remote_wakeup_connected : 1;
+            uint32_t remote_wakeup_enale : 1;
+            uint32_t TU_RESERVED : 21;
+        } control_bit;
+    };
+
+    union
+    {
+        uint32_t command_status;
+        struct
+        {
+            uint32_t controller_reset : 1;
+            uint32_t control_list_filled : 1;
+            uint32_t bulk_list_filled : 1;
+            uint32_t ownership_change_request : 1;
+            uint32_t : 12;
+            uint32_t scheduling_overrun_count : 2;
+        } command_status_bit;
+    };
+
+    uint32_t interrupt_status;
+    uint32_t interrupt_enable;
+    uint32_t interrupt_disable;
+
+    uint32_t hcca;
+    uint32_t period_current_ed;
+    uint32_t control_head_ed;
+    uint32_t control_current_ed;
+    uint32_t bulk_head_ed;
+    uint32_t bulk_current_ed;
+    uint32_t done_head;
+
+    uint32_t frame_interval;
+    uint32_t frame_remaining;
+    uint32_t frame_number;
+    uint32_t periodic_start;
+    uint32_t lowspeed_threshold;
+
+    union
+    {
+        uint32_t rh_descriptorA;
+        struct
+        {
+            uint32_t number_downstream_ports : 8;
+            uint32_t power_switching_mode : 1;
+            uint32_t no_power_switching : 1;
+            uint32_t device_type : 1;
+            uint32_t overcurrent_protection_mode : 1;
+            uint32_t no_over_current_protection : 1;
+            uint32_t reserved : 11;
+            uint32_t power_on_to_good_time : 8;
+        } rh_descriptorA_bit;
+    };
+
+    union
+    {
+        uint32_t rh_descriptorB;
+        struct
+        {
+            uint32_t device_removable : 16;
+            uint32_t port_power_control_mask : 16;
+        } rh_descriptorB_bit;
+    };
+
+    union
+    {
+        uint32_t rh_status;
+        struct
+        {
+            uint32_t local_power_status : 1; // read Local Power Status; write: Clear Global Power
+            uint32_t over_current_indicator : 1;
+            uint32_t : 13;
+            uint32_t device_remote_wakeup_enable : 1;
+            uint32_t local_power_status_change : 1;
+            uint32_t over_current_indicator_change : 1;
+            uint32_t : 13;
+            uint32_t clear_remote_wakeup_enable : 1;
+        } rh_status_bit;
+    };
+
+    union
+    {
+        uint32_t rhport_status[4];
+        struct
+        {
+            uint32_t current_connect_status : 1;
+            uint32_t port_enable_status : 1;
+            uint32_t port_suspend_status : 1;
+            uint32_t port_over_current_indicator : 1;
+            uint32_t port_reset_status : 1;
+            uint32_t : 3;
+            uint32_t port_power_status : 1;
+            uint32_t low_speed_device_attached : 1;
+            uint32_t : 6;
+            uint32_t connect_status_change : 1;
+            uint32_t port_enable_status_change : 1;
+            uint32_t port_suspend_status_change : 1;
+            uint32_t port_over_current_indicator_change : 1;
+            uint32_t port_reset_status_change : 1;
+            uint32_t TU_RESERVED : 11;
+        } rhport_status_bit[4];
+    };
+} ohci_registers_t;
+
+#include <hal/debug.h>
+#include <windows.h>
+// thread to print ohci register values
+#define OHCI_REG ((volatile ohci_registers_t *)(0xFED00000))
+#include "ux_hcd_ohci.h"
+VOID *_ux_utility_virtual_address (VOID *physical_address);
+DWORD WINAPI ohci_print (void *param)
+{
+    UX_HCD_OHCI_HCCA *hcca = (UX_HCD_OHCI_HCCA *)_ux_utility_virtual_address((VOID *)OHCI_REG->hcca);
+    while (1) {
+        debugPrint("HcRevision: %x\n", OHCI_REG->revision);
+        debugPrint("HcControl: %x\n", OHCI_REG->control);
+        debugPrint("HcCommandStatus: %x\n", OHCI_REG->command_status);
+        debugPrint("HcInterruptStatus: %x\n", OHCI_REG->interrupt_status);
+        debugPrint("HcInterruptEnable: %x\n", OHCI_REG->interrupt_enable);
+        debugPrint("HcInterruptDisable: %x\n", OHCI_REG->interrupt_disable);
+        debugPrint("HcHCCA: %x donehead %x\n", OHCI_REG->hcca, hcca->ux_hcd_ohci_hcca_done_head);
+        debugPrint("HcPeriodCurrentED: %x\n", OHCI_REG->period_current_ed);
+        debugPrint("HcControlHeadED: %x\n", OHCI_REG->control_head_ed);
+        debugPrint("HcControlCurrentED: %x\n", OHCI_REG->control_current_ed);
+        debugPrint("HcBulkHeadED: %x\n", OHCI_REG->bulk_head_ed);
+        debugPrint("HcBulkCurrentED: %x\n", OHCI_REG->bulk_current_ed);
+        debugPrint("HcDoneHead: %x\n", OHCI_REG->done_head);
+        debugPrint("HcFmInterval: %x\n", OHCI_REG->frame_interval);
+        debugPrint("HcFmRemaining: %x\n", OHCI_REG->frame_remaining);
+        debugPrint("HcFmNumber: %x\n", OHCI_REG->frame_number);
+        debugPrint("HcPeriodicStart: %x\n", OHCI_REG->periodic_start);
+        debugPrint("HcLSThreshold: %x\n", OHCI_REG->lowspeed_threshold);
+        debugPrint("HcRhDescriptorA: %x\n", OHCI_REG->rh_descriptorA);
+        debugPrint("HcRhDescriptorB: %x\n", OHCI_REG->rh_descriptorB);
+        debugPrint("HcRhStatus: %x\n", OHCI_REG->rh_status);
+
+        debugResetCursor();
+        Sleep(1);
+    }
+    // debugPrint("HcRhPortStatus1: %x\n", OHCI_REG->rhport_status[0]);
+    // debugPrint("HcRhPortStatus2: %x\n", OHCI_REG->rhport_status[1]);
+    // debugPrint("HcRhPortStatus3: %x\n", OHCI_REG->rhport_status[2]);
+    // debugPrint("HcRhPortStatus3: %x\n", OHCI_REG->rhport_status[2]);
+}

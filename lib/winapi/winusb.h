@@ -7,9 +7,9 @@
 extern "C" {
 #endif
 
+#include <usb100.h>
 #include <windows.h>
 #include <winusbio.h>
-#include <usb100.h>
 
 typedef PVOID WINUSB_INTERFACE_HANDLE, *PWINUSB_INTERFACE_HANDLE;
 typedef PVOID WINUSB_ISOCH_BUFFER_HANDLE, *PWINUSB_ISOCH_BUFFER_HANDLE;
@@ -17,8 +17,10 @@ typedef PVOID USB_FRAME_NUMBER_AND_QPC_FOR_TIME_SYNC_INFORMATION, *PUSB_FRAME_NU
 
 #pragma pack(push, 1)
 
-typedef union _REQUEST_TYPE {
-    struct {
+typedef union _REQUEST_TYPE
+{
+    struct
+    {
         UCHAR Recipient : 2;
         UCHAR Reserved : 3;
         UCHAR Type : 2;
@@ -27,7 +29,8 @@ typedef union _REQUEST_TYPE {
     UCHAR Byte;
 } REQUEST_TYPE, *PREQUEST_TYPE;
 
-typedef struct _WINUSB_SETUP_PACKET {
+typedef struct _WINUSB_SETUP_PACKET
+{
     UCHAR RequestType;
     UCHAR Request;
     USHORT Value;
@@ -38,70 +41,70 @@ typedef struct _WINUSB_SETUP_PACKET {
 
 typedef LONG USBD_STATUS;
 
-typedef struct _USBD_ISO_PACKET_DESCRIPTOR {
+typedef struct _USBD_ISO_PACKET_DESCRIPTOR
+{
     ULONG Offset;
     ULONG Length;
     USBD_STATUS Status;
 } USBD_ISO_PACKET_DESCRIPTOR, *PUSBD_ISO_PACKET_DESCRIPTOR;
 
-
-BOOL WinUsb_AbortPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID);
-BOOL WinUsb_ControlTransfer(WINUSB_INTERFACE_HANDLE InterfaceHandle, WINUSB_SETUP_PACKET SetupPacket, PUCHAR Buffer,
-                            ULONG BufferLength, PULONG LengthTransferred, LPOVERLAPPED Overlapped);
-BOOL WinUsb_FlushPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID);
-BOOL WinUsb_Free(WINUSB_INTERFACE_HANDLE InterfaceHandle);
-BOOL WinUsb_GetAdjustedFrameNumber(PULONG CurrentFrameNumber, LARGE_INTEGER TimeStamp);
-BOOL WinUsb_GetCurrentFrameNumberAndQpc(WINUSB_INTERFACE_HANDLE InterfaceHandle,
-                                        PUSB_FRAME_NUMBER_AND_QPC_FOR_TIME_SYNC_INFORMATION FrameQpcInfo);
-BOOL WinUsb_GetAssociatedInterface(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AssociatedInterfaceIndex,
-                                   PWINUSB_INTERFACE_HANDLE AssociatedInterfaceHandle);
-BOOL WinUsb_GetCurrentAlternateSetting(WINUSB_INTERFACE_HANDLE InterfaceHandle, PUCHAR SettingNumber);
-BOOL WinUsb_GetCurrentFrameNumber(WINUSB_INTERFACE_HANDLE InterfaceHandle, PULONG CurrentFrameNumber,
-                                  LARGE_INTEGER *TimeStamp);
-BOOL WinUsb_GetDescriptor(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR DescriptorType, UCHAR Index, USHORT LanguageID,
-                          PUCHAR Buffer, ULONG BufferLength, PULONG LengthTransferred);
-BOOL WinUsb_GetOverlappedResult(WINUSB_INTERFACE_HANDLE InterfaceHandle, LPOVERLAPPED lpOverlapped,
-                                LPDWORD lpNumberOfBytesTransferred, BOOL bWait);
-BOOL WinUsb_GetPipePolicy(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, ULONG PolicyType, PULONG ValueLength,
-                          PVOID Value);
-BOOL WinUsb_GetPowerPolicy(WINUSB_INTERFACE_HANDLE InterfaceHandle, ULONG PolicyType, PULONG ValueLength, PVOID Value);
-BOOL WinUsb_Initialize(HANDLE DeviceHandle, PWINUSB_INTERFACE_HANDLE InterfaceHandle);
-PUSB_INTERFACE_DESCRIPTOR WinUsb_ParseConfigurationDescriptor(PUSB_CONFIGURATION_DESCRIPTOR ConfigurationDescriptor,
-                                                              PVOID StartPosition, LONG InterfaceNumber,
-                                                              LONG AlternateSetting, LONG InterfaceClass,
-                                                              LONG InterfaceSubClass, LONG InterfaceProtocol);
-PUSB_COMMON_DESCRIPTOR WinUsb_ParseDescriptors(PVOID DescriptorBuffer, ULONG TotalLength, PVOID StartPosition,
-                                               LONG DescriptorType);
-BOOL WinUsb_ReadIsochPipe(WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length, PULONG FrameNumber,
-                          ULONG NumberOfPackets, PUSBD_ISO_PACKET_DESCRIPTOR IsoPacketDescriptors,
-                          LPOVERLAPPED Overlapped);
-BOOL WinUsb_ReadIsochPipeAsap(WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length, BOOL ContinueStream,
-                              ULONG NumberOfPackets, PUSBD_ISO_PACKET_DESCRIPTOR IsoPacketDescriptors,
-                              LPOVERLAPPED Overlapped);
-BOOL WinUsb_ReadPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, PUCHAR Buffer, ULONG BufferLength,
-                     PULONG LengthTransferred, LPOVERLAPPED Overlapped);
-BOOL WinUsb_RegisterIsochBuffer(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, PUCHAR Buffer,
-                                ULONG BufferLength, PWINUSB_ISOCH_BUFFER_HANDLE IsochBufferHandle);
-BOOL WinUsb_QueryDeviceInformation(WINUSB_INTERFACE_HANDLE InterfaceHandle, ULONG InformationType, PULONG BufferLength,
-                                   PVOID Buffer);
-BOOL WinUsb_QueryInterfaceSettings(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AlternateInterfaceNumber,
-                                   PUSB_INTERFACE_DESCRIPTOR UsbAltInterfaceDescriptor);
-BOOL WinUsb_QueryPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AlternateInterfaceNumber, UCHAR PipeIndex,
-                      PWINUSB_PIPE_INFORMATION PipeInformation);
-BOOL WinUsb_QueryPipeEx(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AlternateInterfaceNumber, UCHAR PipeIndex,
-                        PWINUSB_PIPE_INFORMATION_EX PipeInformationEx);
-BOOL WinUsb_ResetPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID);
-BOOL WinUsb_SetCurrentAlternateSetting(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR SettingNumber);
-BOOL WinUsb_SetPipePolicy(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, ULONG PolicyType, ULONG ValueLength,
-                          PVOID Value);
-BOOL WinUsb_SetPowerPolicy(WINUSB_INTERFACE_HANDLE InterfaceHandle, ULONG PolicyType, ULONG ValueLength, PVOID Value);
-BOOL WinUsb_UnregisterIsochBuffer(WINUSB_ISOCH_BUFFER_HANDLE IsochBufferHandle);
-BOOL WinUsb_WriteIsochPipe(WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length, PULONG FrameNumber,
+BOOL WinUsb_AbortPipe (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID);
+BOOL WinUsb_ControlTransfer (WINUSB_INTERFACE_HANDLE InterfaceHandle, WINUSB_SETUP_PACKET SetupPacket, PUCHAR Buffer,
+                             ULONG BufferLength, PULONG LengthTransferred, LPOVERLAPPED Overlapped);
+BOOL WinUsb_FlushPipe (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID);
+BOOL WinUsb_Free (WINUSB_INTERFACE_HANDLE InterfaceHandle);
+BOOL WinUsb_GetAdjustedFrameNumber (PULONG CurrentFrameNumber, LARGE_INTEGER TimeStamp);
+BOOL WinUsb_GetCurrentFrameNumberAndQpc (WINUSB_INTERFACE_HANDLE InterfaceHandle,
+                                         PUSB_FRAME_NUMBER_AND_QPC_FOR_TIME_SYNC_INFORMATION FrameQpcInfo);
+BOOL WinUsb_GetAssociatedInterface (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AssociatedInterfaceIndex,
+                                    PWINUSB_INTERFACE_HANDLE AssociatedInterfaceHandle);
+BOOL WinUsb_GetCurrentAlternateSetting (WINUSB_INTERFACE_HANDLE InterfaceHandle, PUCHAR SettingNumber);
+BOOL WinUsb_GetCurrentFrameNumber (WINUSB_INTERFACE_HANDLE InterfaceHandle, PULONG CurrentFrameNumber,
+                                   LARGE_INTEGER *TimeStamp);
+BOOL WinUsb_GetDescriptor (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR DescriptorType, UCHAR Index,
+                           USHORT LanguageID, PUCHAR Buffer, ULONG BufferLength, PULONG LengthTransferred);
+BOOL WinUsb_GetOverlappedResult (WINUSB_INTERFACE_HANDLE InterfaceHandle, LPOVERLAPPED lpOverlapped,
+                                 LPDWORD lpNumberOfBytesTransferred, BOOL bWait);
+BOOL WinUsb_GetPipePolicy (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, ULONG PolicyType, PULONG ValueLength,
+                           PVOID Value);
+BOOL WinUsb_GetPowerPolicy (WINUSB_INTERFACE_HANDLE InterfaceHandle, ULONG PolicyType, PULONG ValueLength, PVOID Value);
+BOOL WinUsb_Initialize (HANDLE DeviceHandle, PWINUSB_INTERFACE_HANDLE InterfaceHandle);
+PUSB_INTERFACE_DESCRIPTOR WinUsb_ParseConfigurationDescriptor (PUSB_CONFIGURATION_DESCRIPTOR ConfigurationDescriptor,
+                                                               PVOID StartPosition, LONG InterfaceNumber,
+                                                               LONG AlternateSetting, LONG InterfaceClass,
+                                                               LONG InterfaceSubClass, LONG InterfaceProtocol);
+PUSB_COMMON_DESCRIPTOR WinUsb_ParseDescriptors (PVOID DescriptorBuffer, ULONG TotalLength, PVOID StartPosition,
+                                                LONG DescriptorType);
+BOOL WinUsb_ReadIsochPipe (WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length, PULONG FrameNumber,
+                           ULONG NumberOfPackets, PUSBD_ISO_PACKET_DESCRIPTOR IsoPacketDescriptors,
                            LPOVERLAPPED Overlapped);
-BOOL WinUsb_WriteIsochPipeAsap(WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length, BOOL ContinueStream,
+BOOL WinUsb_ReadIsochPipeAsap (WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length, BOOL ContinueStream,
+                               ULONG NumberOfPackets, PUSBD_ISO_PACKET_DESCRIPTOR IsoPacketDescriptors,
                                LPOVERLAPPED Overlapped);
-BOOL WinUsb_WritePipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, PUCHAR Buffer, ULONG BufferLength,
+BOOL WinUsb_ReadPipe (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, PUCHAR Buffer, ULONG BufferLength,
                       PULONG LengthTransferred, LPOVERLAPPED Overlapped);
+BOOL WinUsb_RegisterIsochBuffer (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, PUCHAR Buffer,
+                                 ULONG BufferLength, PWINUSB_ISOCH_BUFFER_HANDLE IsochBufferHandle);
+BOOL WinUsb_QueryDeviceInformation (WINUSB_INTERFACE_HANDLE InterfaceHandle, ULONG InformationType, PULONG BufferLength,
+                                    PVOID Buffer);
+BOOL WinUsb_QueryInterfaceSettings (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AlternateInterfaceNumber,
+                                    PUSB_INTERFACE_DESCRIPTOR UsbAltInterfaceDescriptor);
+BOOL WinUsb_QueryPipe (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AlternateInterfaceNumber, UCHAR PipeIndex,
+                       PWINUSB_PIPE_INFORMATION PipeInformation);
+BOOL WinUsb_QueryPipeEx (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AlternateInterfaceNumber, UCHAR PipeIndex,
+                         PWINUSB_PIPE_INFORMATION_EX PipeInformationEx);
+BOOL WinUsb_ResetPipe (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID);
+BOOL WinUsb_SetCurrentAlternateSetting (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR SettingNumber);
+BOOL WinUsb_SetPipePolicy (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, ULONG PolicyType, ULONG ValueLength,
+                           PVOID Value);
+BOOL WinUsb_SetPowerPolicy (WINUSB_INTERFACE_HANDLE InterfaceHandle, ULONG PolicyType, ULONG ValueLength, PVOID Value);
+BOOL WinUsb_UnregisterIsochBuffer (WINUSB_ISOCH_BUFFER_HANDLE IsochBufferHandle);
+BOOL WinUsb_WriteIsochPipe (WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length, PULONG FrameNumber,
+                            LPOVERLAPPED Overlapped);
+BOOL WinUsb_WriteIsochPipeAsap (WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length,
+                                BOOL ContinueStream, LPOVERLAPPED Overlapped);
+BOOL WinUsb_WritePipe (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, PUCHAR Buffer, ULONG BufferLength,
+                       PULONG LengthTransferred, LPOVERLAPPED Overlapped);
 
 // Source https://github.com/reactos/reactos/blob/master/sdk/include/psdk/usb.h
 // SPDX-License-Identifier: CC0-1.0

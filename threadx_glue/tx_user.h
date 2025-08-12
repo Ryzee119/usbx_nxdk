@@ -38,7 +38,7 @@ struct threadx
     VOID *tx_thread_suspend_control_block;
     void (*tx_thread_entry)(ULONG id);
 
-    TX_TIMER_INTERNAL   tx_thread_timer;
+    TX_TIMER_INTERNAL tx_thread_timer;
     LIST_ENTRY entry;
 };
 
@@ -64,8 +64,8 @@ struct timerx
     ULONG tx_timer_id;
 };
 
-UINT _tx_thread_interrupt_disable(void);
-void _tx_thread_interrupt_restore(UINT old_posture);
+UINT _tx_thread_interrupt_disable (void);
+void _tx_thread_interrupt_restore (UINT old_posture);
 #define TX_INTERRUPT_SAVE_AREA UINT interrupt_save;
 #define TX_DISABLE interrupt_save = _tx_thread_interrupt_disable();
 #define TX_RESTORE _tx_thread_interrupt_restore(interrupt_save);

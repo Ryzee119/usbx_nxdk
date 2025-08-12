@@ -9,21 +9,24 @@
 extern "C" {
 #endif
 
-typedef enum _USBD_PIPE_TYPE {
+typedef enum _USBD_PIPE_TYPE
+{
     UsbdPipeTypeControl,
     UsbdPipeTypeIsochronous,
     UsbdPipeTypeBulk,
     UsbdPipeTypeInterrupt
 } USBD_PIPE_TYPE;
 
-typedef struct _WINUSB_PIPE_INFORMATION {
+typedef struct _WINUSB_PIPE_INFORMATION
+{
     USBD_PIPE_TYPE PipeType;
     UCHAR PipeId;
     USHORT MaximumPacketSize;
     UCHAR Interval;
 } WINUSB_PIPE_INFORMATION, *PWINUSB_PIPE_INFORMATION;
 
-typedef struct _WINUSB_PIPE_INFORMATION_EX {
+typedef struct _WINUSB_PIPE_INFORMATION_EX
+{
     USBD_PIPE_TYPE PipeType;
     UCHAR PipeId;
     USHORT MaximumPacketSize;

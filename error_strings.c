@@ -1,4 +1,5 @@
-struct error_strings {
+struct error_strings
+{
     int error_code;
     const char *error_string;
 };
@@ -2752,7 +2753,8 @@ const struct error_strings err_strings[] = {
 
 };
 
-const char *get_error_string(int error_code) {
+const char *get_error_string (int error_code)
+{
     for (unsigned int i = 0; i < sizeof(err_strings) / sizeof(err_strings[0]); i++) {
         if (err_strings[i].error_code == error_code) {
             return err_strings[i].error_string;

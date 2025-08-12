@@ -2,23 +2,25 @@
 
 // SPDX-FileCopyrightText: 2024 Ryan Wendland
 
-#include <stdlib.h>
 #include <assert.h>
 #include <nxdk/usb.h>
+#include <stdlib.h>
 #include <windows.h>
 
 #include "usb.h"
 #include "ux_api.h"
-#include "ux_host_stack.h"
-#include "ux_host_class_hub.h"
 #include "ux_hcd_ohci.h"
+#include "ux_host_class_hub.h"
+#include "ux_host_stack.h"
 
-typedef struct nx_usb_change_callback {
+typedef struct nx_usb_change_callback
+{
     void (*ux_system_host_change_function)(ULONG, UX_HOST_CLASS *, VOID *);
     LIST_ENTRY entry;
 } nx_usb_change_callback_t;
 
-typedef struct nx_usb_data {
+typedef struct nx_usb_data
+{
     UX_HCD_OHCI *hcd_ohci;
     KINTERRUPT irq;
     KDPC dpc;
@@ -32,18 +34,21 @@ typedef struct nx_usb_data {
 } nx_usb_data_t;
 static nx_usb_data_t usb = {0};
 
-static BOOLEAN NTAPI irq(PKINTERRUPT Interrupt, PVOID ServiceContext) {
+static BOOLEAN NTAPI irq (PKINTERRUPT Interrupt, PVOID ServiceContext)
+{
     _ux_hcd_ohci_register_write(usb.hcd_ohci, OHCI_HC_INTERRUPT_DISABLE, OHCI_HC_INT_MIE);
     KeInsertQueueDpc(&usb.dpc, NULL, NULL);
     return TRUE;
 }
 
-static void NTAPI dpc(PKDPC Dpc, PVOID DeferredContext, PVOID arg1, PVOID arg2) {
+static void NTAPI dpc (PKDPC Dpc, PVOID DeferredContext, PVOID arg1, PVOID arg2)
+{
     KeSetEvent(&usb.evt, IO_KEYBOARD_INCREMENT, FALSE);
     return;
 }
 
-static DWORD WINAPI isr(LPVOID lpThreadParameter) {
+static void NTAPI isr (PKSTART_ROUTINE StartRoutine, PVOID StartContext)
+{
     while (1) {
         KeWaitForSingleObject(&usb.evt, Executive, KernelMode, FALSE, NULL);
         if (usb.ref_count == 0) {
@@ -52,7 +57,8 @@ static DWORD WINAPI isr(LPVOID lpThreadParameter) {
         ux_hcd_ohci_interrupt_handler();
         _ux_hcd_ohci_register_write(usb.hcd_ohci, OHCI_HC_INTERRUPT_ENABLE, OHCI_HC_INT_MIE);
     }
-    return 0;
+    PsTerminateSystemThread(0);
+    return;
 }
 
 // See https://github.com/eclipse-threadx/rtos-docs/blob/main/rtos-docs/usbx/usbx-host-stack-4.md#input-parameter
@@ -66,7 +72,8 @@ static UINT host_change_function(ULONG change_code, UX_HOST_CLASS *ux_class, VOI
     return UX_SUCCESS;
 }
 
-int nxUsbInit() {
+int nxUsbInit (void)
+{
     if (++usb.ref_count > 1) {
         return usb.ref_count;
     }
@@ -101,6 +108,11 @@ int nxUsbInit() {
     KeInitializeInterrupt(&usb.irq, &irq, &usb, vector, irql, LevelSensitive, FALSE);
     KeInitializeDpc(&usb.dpc, dpc, &usb);
     KeInitializeEvent(&usb.evt, SynchronizationEvent, FALSE);
+    PsCreateSystemThreadEx(&usb.irq_thread, 0, 0, 0, NULL, NULL, NULL, FALSE, FALSE, isr);
+    if (usb.irq_thread == NULL) {
+        goto init_failure;
+    }
+    KeConnectInterrupt(&usb.irq);
 
     // Inject events for all root hub ports on startup in case OHCI hardware doesn't generate them for pre-connected
     // devices
@@ -121,9 +133,6 @@ int nxUsbInit() {
     assert(usb.hcd_ohci);
     _ux_host_semaphore_put(&_ux_system_host->ux_system_host_enum_semaphore);
 
-    KeConnectInterrupt(&usb.irq);
-    usb.irq_thread = CreateThread(NULL, 0, isr, NULL, 0, NULL); // FIXME Use KeThread..
-
     return usb.ref_count;
 
 init_failure:
@@ -132,7 +141,8 @@ init_failure:
     return -1;
 }
 
-int nxUsbShutdown() {
+int nxUsbShutdown (void)
+{
     if (usb.ref_count == 0 || --usb.ref_count > 0) {
         return usb.ref_count;
     }
@@ -147,10 +157,9 @@ int nxUsbShutdown() {
     // Clean up OHCI IRQ thread
     if (usb.irq_thread) {
         KeSetEvent(&usb.evt, IO_KEYBOARD_INCREMENT, FALSE);
-        WaitForSingleObject(usb.irq_thread, INFINITE);
-        CloseHandle(usb.irq_thread);
+        NtWaitForSingleObject(usb.irq_thread, FALSE, NULL);
+        NtClose(usb.irq_thread);
     }
-
     KeDisconnectInterrupt(&usb.irq);
 
     // Clean up user registered change callbacks
@@ -169,7 +178,8 @@ int nxUsbShutdown() {
     return usb.ref_count;
 }
 
-int nxUsbRegisterChangeCallback(void (*ux_system_host_change_function)(ULONG, UX_HOST_CLASS *, VOID *)) {
+int nxUsbRegisterChangeCallback (void (*ux_system_host_change_function)(ULONG, UX_HOST_CLASS *, VOID *))
+{
     if (ux_system_host_change_function == NULL) {
         return -1;
     }
@@ -184,7 +194,18 @@ int nxUsbRegisterChangeCallback(void (*ux_system_host_change_function)(ULONG, UX
     return 0;
 }
 
-static UINT nxusb_class_entry_function(UX_HOST_CLASS_COMMAND *command) {
+void nxUsbLock(nx_usb_device_t *nx_device)
+{
+    EnterCriticalSection(&nx_device->lock);
+}
+
+void nxUsbUnlock(nx_usb_device_t *nx_device)
+{
+    LeaveCriticalSection(&nx_device->lock);
+}
+
+static UINT nxusb_class_entry_function (UX_HOST_CLASS_COMMAND *command)
+{
     switch (command->ux_host_class_command_request) {
         case UX_HOST_CLASS_COMMAND_DEACTIVATE:
             nx_usb_device_t *nx_device = (nx_usb_device_t *)command->ux_host_class_command_instance;
@@ -193,9 +214,9 @@ static UINT nxusb_class_entry_function(UX_HOST_CLASS_COMMAND *command) {
             UX_DEVICE *ux_device = nx_device->ux_device;
 
             // Prevent any more transfers occuring on this device
-            EnterCriticalSection(&nx_device->lock);
+            nxUsbLock(nx_device);
             nx_device->ux_device = NULL;
-            LeaveCriticalSection(&nx_device->lock);
+            nxUsbUnlock(nx_device);
 
             // Send abort to any active control transfers
             ux_host_stack_endpoint_transfer_abort(&ux_device->ux_device_control_endpoint);
@@ -212,11 +233,11 @@ static UINT nxusb_class_entry_function(UX_HOST_CLASS_COMMAND *command) {
                     }
                     ux_interface = ux_interface->ux_interface_next_interface;
                 }
-            }     
-            
-            return (UX_SUCCESS);
+            }
+
+            return UX_SUCCESS;
         default:
-            return (UX_FUNCTION_NOT_SUPPORTED);
+            return UX_FUNCTION_NOT_SUPPORTED;
     }
 }
 
@@ -229,8 +250,9 @@ static UX_HOST_CLASS nxusb_host_class = {
     .ux_host_class_ext = NULL,
 };
 
-int nxUsbDeviceClaim(match_device_id_t *device_ids, match_device_class_t *device_class,
-                     match_interface_class_t *interface_class, nx_usb_device_t *nx_device) {
+int nxUsbDeviceClaim (match_device_id_t *device_ids, match_device_class_t *device_class,
+                      match_interface_class_t *interface_class, nx_usb_device_t *nx_device)
+{
     UX_DEVICE *ux_device = NULL;
     UX_CONFIGURATION *ux_configuration = NULL;
     UX_INTERFACE *ux_interface = NULL;
@@ -246,7 +268,6 @@ int nxUsbDeviceClaim(match_device_id_t *device_ids, match_device_class_t *device
         return -1;
     }
 
-    // We dont want USBX changing stuff on us if user hotplugs so grab ux system mutex.
     _ux_system_mutex_on(&_ux_system->ux_system_mutex);
     for (device_index = 0; device_index < UX_MAX_DEVICES; device_index++) {
         ux_device = &_ux_system_host->ux_system_host_device_array[device_index];
@@ -310,6 +331,7 @@ int nxUsbDeviceClaim(match_device_id_t *device_ids, match_device_class_t *device
         ux_device->ux_device_class = &nxusb_host_class;
         ux_device->ux_device_class_instance = nx_device;
         nx_device->ux_device = ux_device;
+        memcpy(&nx_device->device_descriptor, &ux_device->ux_device_descriptor, sizeof(UX_DEVICE_DESCRIPTOR));
         InitializeCriticalSection(&nx_device->lock);
     }
 
@@ -327,9 +349,8 @@ int nxUsbDeviceClaim(match_device_id_t *device_ids, match_device_class_t *device
     }
 }
 
-int nxUsbDeviceRelease(nx_usb_device_t *nx_device) {
-    EnterCriticalSection(&nx_device->lock);
-
+int nxUsbDeviceRelease (nx_usb_device_t *nx_device)
+{
     _ux_system_mutex_on(&_ux_system->ux_system_mutex);
     if (nx_device->ux_device) {
         UX_INTERRUPT_SAVE_AREA
@@ -340,17 +361,18 @@ int nxUsbDeviceRelease(nx_usb_device_t *nx_device) {
         nx_device->ux_device = NULL;
     }
     _ux_system_mutex_off(&_ux_system->ux_system_mutex);
-
-    LeaveCriticalSection(&nx_device->lock);
+    free(nx_device->configuration_descriptor);
     DeleteCriticalSection(&nx_device->lock);
     return 0;
 }
 
 // Utility functions from USBX
-VOID *_ux_utility_physical_address(VOID *virtual_address) {
+VOID *_ux_utility_physical_address (VOID *virtual_address)
+{
     return (virtual_address) ? ((VOID *)MmGetPhysicalAddress(virtual_address)) : NULL;
 }
 
-VOID *_ux_utility_virtual_address(VOID *physical_address) {
+VOID *_ux_utility_virtual_address (VOID *physical_address)
+{
     return (physical_address) ? (VOID *)((uintptr_t)physical_address | 0x80000000) : NULL;
 }

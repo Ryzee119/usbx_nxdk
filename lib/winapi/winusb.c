@@ -2,65 +2,57 @@
 
 // SPDX-FileCopyrightText: 2024 Ryan Wendland
 
-#include <windows.h>
-#include <winusb.h>
 #include <assert.h>
-#include <stdlib.h>
 #include <limits.h>
 #include <nxdk/usb.h>
+#include <stdlib.h>
+#include <windows.h>
+#include <winusb.h>
 
 #include "ux_api.h"
-#include "ux_host_stack.h"
 #include "ux_hcd_ohci.h"
+#include "ux_host_stack.h"
 
-static DWORD ux_status_to_win32(UINT status);
-#define LOCK_INTERFACE(a) EnterCriticalSection(&a->nx_device->lock);
-#define UNLOCK_INTERFACE(a) LeaveCriticalSection(&a->nx_device->lock);
+static DWORD ux_status_to_win32 (UINT status);
+#define LOCK_INTERFACE(a)   nxUsbLock(a->nx_device);
+#define UNLOCK_INTERFACE(a) nxUsbUnlock(a->nx_device);
 
-#define GET_UX_INTERFACE(winusb_interface) ((winusb_interface)->ux_interface)
+#define GET_UX_INTERFACE(winusb_interface)     ((winusb_interface)->ux_interface)
 #define GET_UX_CONFIGURATION(winusb_interface) ((winusb_interface)->ux_interface->ux_interface_configuration)
-#define GET_UX_DEVICE(winusb_interface) ((winusb_interface)->nx_device->ux_device);
-#define RETURN_ON_INVALID_HANDLE(handle_check)                                                                         \
-    if (handle_check) {                                                                                                \
-        SetLastError(ERROR_INVALID_HANDLE);                                                                            \
-        return FALSE;                                                                                                  \
+#define GET_UX_DEVICE(winusb_interface)        ((winusb_interface)->nx_device->ux_device);
+#define RETURN_ON_INVALID_HANDLE(handle_check) \
+    if (handle_check) {                        \
+        SetLastError(ERROR_INVALID_HANDLE);    \
+        return FALSE;                          \
     }
 
-#define RETURN_ON_INVALID_PARAMETER(param_check)                                                                       \
-    if (param_check) {                                                                                                 \
-        SetLastError(ERROR_INVALID_PARAMETER);                                                                         \
-        return FALSE;                                                                                                  \
+#define RETURN_ON_INVALID_PARAMETER(param_check) \
+    if (param_check) {                           \
+        SetLastError(ERROR_INVALID_PARAMETER);   \
+        return FALSE;                            \
     }
 
-#define RETURN_ON_DISCONNECTED_DEVICE(winusb_interface)                                                                \
-    if (interface_connected(winusb_interface) == FALSE) {                                                              \
-        SetLastError(ERROR_DEV_NOT_EXIST);                                                                             \
-        UNLOCK_INTERFACE(winusb_interface);                                                                            \
-        return FALSE;                                                                                                  \
+#define RETURN_ON_DISCONNECTED_DEVICE(winusb_interface)   \
+    if (interface_connected(winusb_interface) == FALSE) { \
+        SetLastError(ERROR_DEV_NOT_EXIST);                \
+        UNLOCK_INTERFACE(winusb_interface);               \
+        return FALSE;                                     \
     }
 
-typedef struct WINUSB_INTERFACE_STRUCT {
+typedef struct WINUSB_INTERFACE_STRUCT
+{
     nx_usb_device_t *nx_device;
     UX_INTERFACE *ux_interface;
 } WINUSB_INTERFACE_STRUCT;
 
-static BOOL interface_connected(WINUSB_INTERFACE_HANDLE InterfaceHandle) {
-    WINUSB_INTERFACE_STRUCT *winusb_interface;
-
-    winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
-
-    assert(winusb_interface->nx_device);
-    if (winusb_interface->nx_device->ux_device == NULL) {
-        return FALSE;
-    }
-
-    assert(winusb_interface->ux_interface);
-    assert(winusb_interface->ux_interface->ux_interface_handle == (ULONG)winusb_interface->ux_interface);
-
-    return TRUE;
+static BOOL interface_connected (WINUSB_INTERFACE_HANDLE InterfaceHandle)
+{
+    WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
+    return winusb_interface->nx_device->ux_device != NULL;
 }
 
-static UX_ENDPOINT *get_ep_from_pipeid(UX_INTERFACE *ux_interface, UCHAR PipeID) {
+static UX_ENDPOINT *get_endpoint_from_pipeid (UX_INTERFACE *ux_interface, UCHAR PipeID)
+{
     UX_ENDPOINT *endpoint = ux_interface->ux_interface_first_endpoint;
     while (endpoint != NULL) {
         if (endpoint->ux_endpoint_descriptor.bEndpointAddress == PipeID) {
@@ -71,7 +63,8 @@ static UX_ENDPOINT *get_ep_from_pipeid(UX_INTERFACE *ux_interface, UCHAR PipeID)
     return endpoint;
 }
 
-BOOL WinUsb_Initialize(HANDLE DeviceHandle, PWINUSB_INTERFACE_HANDLE InterfaceHandle) {
+BOOL WinUsb_Initialize (HANDLE DeviceHandle, PWINUSB_INTERFACE_HANDLE InterfaceHandle)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = NULL;
     DWORD last_error;
     UINT status;
@@ -81,9 +74,7 @@ BOOL WinUsb_Initialize(HANDLE DeviceHandle, PWINUSB_INTERFACE_HANDLE InterfaceHa
 
     nx_usb_device_t *nx_device = (nx_usb_device_t *)DeviceHandle;
 
-    // It's possible the USB device might be unplugged while we are here and we dont
-    // want USBX cleaning up memory while we are still using it
-    EnterCriticalSection(&nx_device->lock);
+    nxUsbLock(nx_device);
 
     if (nx_device->ux_device == NULL) {
         last_error = ERROR_DEV_NOT_EXIST;
@@ -138,12 +129,12 @@ BOOL WinUsb_Initialize(HANDLE DeviceHandle, PWINUSB_INTERFACE_HANDLE InterfaceHa
     winusb_interface->nx_device = nx_device;
     winusb_interface->ux_interface = ux_interface;
 
-    LeaveCriticalSection(&nx_device->lock);
+    nxUsbUnlock(nx_device);
 
     *InterfaceHandle = (WINUSB_INTERFACE_HANDLE)winusb_interface;
     return TRUE;
 init_fail:
-    LeaveCriticalSection(&nx_device->lock);
+    nxUsbUnlock(nx_device);
     if (winusb_interface) {
         free(winusb_interface);
     }
@@ -151,7 +142,8 @@ init_fail:
     return FALSE;
 }
 
-BOOL WinUsb_Free(WINUSB_INTERFACE_HANDLE InterfaceHandle) {
+BOOL WinUsb_Free (WINUSB_INTERFACE_HANDLE InterfaceHandle)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
 
     RETURN_ON_INVALID_HANDLE(InterfaceHandle == NULL);
@@ -165,7 +157,8 @@ BOOL WinUsb_Free(WINUSB_INTERFACE_HANDLE InterfaceHandle) {
     return TRUE;
 }
 
-BOOL WinUsb_SetCurrentAlternateSetting(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR SettingNumber) {
+BOOL WinUsb_SetCurrentAlternateSetting (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR SettingNumber)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
     UINT status;
 
@@ -195,7 +188,8 @@ BOOL WinUsb_SetCurrentAlternateSetting(WINUSB_INTERFACE_HANDLE InterfaceHandle, 
     return TRUE;
 }
 
-BOOL WinUsb_GetCurrentAlternateSetting(WINUSB_INTERFACE_HANDLE InterfaceHandle, PUCHAR SettingNumber) {
+BOOL WinUsb_GetCurrentAlternateSetting (WINUSB_INTERFACE_HANDLE InterfaceHandle, PUCHAR SettingNumber)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
     BOOL status = FALSE;
 
@@ -216,8 +210,9 @@ BOOL WinUsb_GetCurrentAlternateSetting(WINUSB_INTERFACE_HANDLE InterfaceHandle, 
     return status;
 }
 
-BOOL WinUsb_GetAssociatedInterface(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AssociatedInterfaceIndex,
-                                   PWINUSB_INTERFACE_HANDLE AssociatedInterfaceHandle) {
+BOOL WinUsb_GetAssociatedInterface (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AssociatedInterfaceIndex,
+                                    PWINUSB_INTERFACE_HANDLE AssociatedInterfaceHandle)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
     UX_INTERFACE *ux_associated_interface;
     UINT status;
@@ -266,8 +261,9 @@ BOOL WinUsb_GetAssociatedInterface(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHA
     return TRUE;
 }
 
-BOOL WinUsb_QueryDeviceInformation(WINUSB_INTERFACE_HANDLE InterfaceHandle, ULONG InformationType, PULONG BufferLength,
-                                   PVOID Buffer) {
+BOOL WinUsb_QueryDeviceInformation (WINUSB_INTERFACE_HANDLE InterfaceHandle, ULONG InformationType, PULONG BufferLength,
+                                    PVOID Buffer)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
 
     if (BufferLength == NULL || Buffer == NULL || *BufferLength == 0) {
@@ -303,8 +299,9 @@ BOOL WinUsb_QueryDeviceInformation(WINUSB_INTERFACE_HANDLE InterfaceHandle, ULON
     return TRUE;
 }
 
-BOOL WinUsb_ControlTransfer(WINUSB_INTERFACE_HANDLE InterfaceHandle, WINUSB_SETUP_PACKET SetupPacket, PUCHAR Buffer,
-                            ULONG BufferLength, PULONG LengthTransferred, LPOVERLAPPED Overlapped) {
+BOOL WinUsb_ControlTransfer (WINUSB_INTERFACE_HANDLE InterfaceHandle, WINUSB_SETUP_PACKET SetupPacket, PUCHAR Buffer,
+                             ULONG BufferLength, PULONG LengthTransferred, LPOVERLAPPED Overlapped)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
     UINT status;
 
@@ -357,8 +354,9 @@ BOOL WinUsb_ControlTransfer(WINUSB_INTERFACE_HANDLE InterfaceHandle, WINUSB_SETU
     return TRUE;
 }
 
-BOOL WinUsb_GetDescriptor(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR DescriptorType, UCHAR Index, USHORT LanguageID,
-                          PUCHAR Buffer, ULONG BufferLength, PULONG LengthTransferred) {
+BOOL WinUsb_GetDescriptor (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR DescriptorType, UCHAR Index,
+                           USHORT LanguageID, PUCHAR Buffer, ULONG BufferLength, PULONG LengthTransferred)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
     BOOL got_cached_descriptor = FALSE;
     DWORD last_error = ERROR_SUCCESS;
@@ -433,8 +431,9 @@ BOOL WinUsb_GetDescriptor(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR Descrip
     }
 }
 
-BOOL WinUsb_QueryInterfaceSettings(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AlternateInterfaceNumber,
-                                   PUSB_INTERFACE_DESCRIPTOR UsbAltInterfaceDescriptor) {
+BOOL WinUsb_QueryInterfaceSettings (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AlternateInterfaceNumber,
+                                    PUSB_INTERFACE_DESCRIPTOR UsbAltInterfaceDescriptor)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
 
     // CHECK: Windows will crash with NULL descriptor. We want to atleast catch it with an assert
@@ -465,8 +464,9 @@ BOOL WinUsb_QueryInterfaceSettings(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHA
     return FALSE;
 }
 
-BOOL WinUsb_QueryPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AlternateInterfaceNumber, UCHAR PipeIndex,
-                      PWINUSB_PIPE_INFORMATION PipeInformation) {
+BOOL WinUsb_QueryPipe (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AlternateInterfaceNumber, UCHAR PipeIndex,
+                       PWINUSB_PIPE_INFORMATION PipeInformation)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
     UINT status;
 
@@ -519,8 +519,9 @@ BOOL WinUsb_QueryPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AlternateIn
     return TRUE;
 }
 
-BOOL WinUsb_QueryPipeEx(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AlternateInterfaceNumber, UCHAR PipeIndex,
-                        PWINUSB_PIPE_INFORMATION_EX PipeInformationEx) {
+BOOL WinUsb_QueryPipeEx (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR AlternateInterfaceNumber, UCHAR PipeIndex,
+                         PWINUSB_PIPE_INFORMATION_EX PipeInformationEx)
+{
     // We dont support high speed and super speed so the maximum bytes per interval is the same as the maximum packet
     // size. We just call WinUsb_QueryPipe then populate the extra field in the extended structure manually.
     if (WinUsb_QueryPipe(InterfaceHandle, AlternateInterfaceNumber, PipeIndex,
@@ -531,7 +532,8 @@ BOOL WinUsb_QueryPipeEx(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR Alternate
     return FALSE;
 }
 
-static void transfer_request_completion_function(UX_TRANSFER *ux_transfer) {
+static void transfer_request_completion_function (UX_TRANSFER *ux_transfer)
+{
     LPOVERLAPPED lpOverlapped = (LPOVERLAPPED)ux_transfer->ux_transfer_request_user_specific;
     assert(lpOverlapped);
 
@@ -553,8 +555,9 @@ static void transfer_request_completion_function(UX_TRANSFER *ux_transfer) {
     SetEvent(lpOverlapped->hEvent);
 }
 
-BOOL WinUsb_ReadPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, PUCHAR Buffer, ULONG BufferLength,
-                     PULONG LengthTransferred, LPOVERLAPPED Overlapped) {
+BOOL WinUsb_ReadPipe (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, PUCHAR Buffer, ULONG BufferLength,
+                      PULONG LengthTransferred, LPOVERLAPPED Overlapped)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
     BOOL is_synchronous = (Overlapped == NULL);
     UINT status;
@@ -564,7 +567,7 @@ BOOL WinUsb_ReadPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, PUCH
     RETURN_ON_DISCONNECTED_DEVICE(winusb_interface);
 
     UX_INTERFACE *ux_interface = GET_UX_INTERFACE(winusb_interface);
-    UX_ENDPOINT *ux_endpoint = get_ep_from_pipeid(ux_interface, PipeID);
+    UX_ENDPOINT *ux_endpoint = get_endpoint_from_pipeid(ux_interface, PipeID);
     if (ux_endpoint == NULL) {
         SetLastError(ERROR_INVALID_PARAMETER);
         UNLOCK_INTERFACE(winusb_interface);
@@ -624,13 +627,15 @@ BOOL WinUsb_ReadPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, PUCH
     return (status == UX_SUCCESS);
 }
 
-BOOL WinUsb_WritePipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, PUCHAR Buffer, ULONG BufferLength,
-                      PULONG LengthTransferred, LPOVERLAPPED Overlapped) {
+BOOL WinUsb_WritePipe (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, PUCHAR Buffer, ULONG BufferLength,
+                       PULONG LengthTransferred, LPOVERLAPPED Overlapped)
+{
     // ReadPipe code handles writes too
     return WinUsb_ReadPipe(InterfaceHandle, PipeID, Buffer, BufferLength, LengthTransferred, Overlapped);
 }
 
-BOOL WinUsb_AbortPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID) {
+BOOL WinUsb_AbortPipe (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
 
     RETURN_ON_INVALID_HANDLE(InterfaceHandle == NULL);
@@ -638,7 +643,7 @@ BOOL WinUsb_AbortPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID) {
     RETURN_ON_DISCONNECTED_DEVICE(winusb_interface);
 
     UX_INTERFACE *ux_interface = GET_UX_INTERFACE(winusb_interface);
-    UX_ENDPOINT *ux_endpoint = get_ep_from_pipeid(ux_interface, PipeID);
+    UX_ENDPOINT *ux_endpoint = get_endpoint_from_pipeid(ux_interface, PipeID);
     ux_host_stack_endpoint_transfer_abort(ux_endpoint);
 
     UNLOCK_INTERFACE(winusb_interface);
@@ -646,12 +651,14 @@ BOOL WinUsb_AbortPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID) {
     return TRUE;
 }
 
-BOOL WinUsb_FlushPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID) {
+BOOL WinUsb_FlushPipe (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID)
+{
     // We don't buffer transfers so this is a no-op
     return TRUE;
 }
 
-BOOL WinUsb_ResetPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID) {
+BOOL WinUsb_ResetPipe (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
     UINT status;
 
@@ -660,7 +667,7 @@ BOOL WinUsb_ResetPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID) {
     RETURN_ON_DISCONNECTED_DEVICE(winusb_interface);
 
     UX_INTERFACE *ux_interface = GET_UX_INTERFACE(winusb_interface);
-    UX_ENDPOINT *ux_endpoint = get_ep_from_pipeid(ux_interface, PipeID);
+    UX_ENDPOINT *ux_endpoint = get_endpoint_from_pipeid(ux_interface, PipeID);
     if (ux_endpoint == NULL) {
         SetLastError(ERROR_INVALID_PARAMETER);
         UNLOCK_INTERFACE(winusb_interface);
@@ -678,8 +685,9 @@ BOOL WinUsb_ResetPipe(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID) {
     return TRUE;
 }
 
-BOOL WinUsb_GetCurrentFrameNumber(WINUSB_INTERFACE_HANDLE InterfaceHandle, PULONG CurrentFrameNumber,
-                                  LARGE_INTEGER *TimeStamp) {
+BOOL WinUsb_GetCurrentFrameNumber (WINUSB_INTERFACE_HANDLE InterfaceHandle, PULONG CurrentFrameNumber,
+                                   LARGE_INTEGER *TimeStamp)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
     ULONG frame_number;
     UINT status = UX_ERROR;
@@ -711,7 +719,8 @@ BOOL WinUsb_GetCurrentFrameNumber(WINUSB_INTERFACE_HANDLE InterfaceHandle, PULON
     }
 }
 
-BOOL WinUsb_GetAdjustedFrameNumber(PULONG CurrentFrameNumber, LARGE_INTEGER TimeStamp) {
+BOOL WinUsb_GetAdjustedFrameNumber (PULONG CurrentFrameNumber, LARGE_INTEGER TimeStamp)
+{
     LARGE_INTEGER counter_frequency;
     LARGE_INTEGER current_counter;
     LARGE_INTEGER elapsed_time;
@@ -745,8 +754,9 @@ BOOL WinUsb_GetAdjustedFrameNumber(PULONG CurrentFrameNumber, LARGE_INTEGER Time
     return TRUE;
 }
 
-BOOL WinUsb_GetOverlappedResult(WINUSB_INTERFACE_HANDLE InterfaceHandle, LPOVERLAPPED lpOverlapped,
-                                LPDWORD lpNumberOfBytesTransferred, BOOL bWait) {
+BOOL WinUsb_GetOverlappedResult (WINUSB_INTERFACE_HANDLE InterfaceHandle, LPOVERLAPPED lpOverlapped,
+                                 LPDWORD lpNumberOfBytesTransferred, BOOL bWait)
+{
     // Windows documentation advises against using file handles for overlapped I/O on USB devices.
     // "Using an event object is better due to potential confusion with multiple concurrent overlapped operations on the
     // same file." While Windows supports this, the Xbox implementation does not support waiting on the file
@@ -771,14 +781,16 @@ BOOL WinUsb_GetOverlappedResult(WINUSB_INTERFACE_HANDLE InterfaceHandle, LPOVERL
 }
 
 #define MAX_QUEUED_ISO_TRANSFERS 2
-typedef struct WINUSH_ISOCH_DATA {
+typedef struct WINUSH_ISOCH_DATA
+{
     UX_TRANSFER ux_transfer;
     PUSBD_ISO_PACKET_DESCRIPTOR IsoPacketDescriptors;
     ULONG NumberOfPackets;
     LPOVERLAPPED lpOverlapped;
 } WINUSH_ISOCH_DATA;
 
-typedef struct WINUSB_ISOCH_BUFFER_STRUCT {
+typedef struct WINUSB_ISOCH_BUFFER_STRUCT
+{
     WINUSB_INTERFACE_HANDLE InterfaceHandle;
     UCHAR PipeID;
     PUCHAR Buffer;
@@ -786,7 +798,8 @@ typedef struct WINUSB_ISOCH_BUFFER_STRUCT {
     WINUSH_ISOCH_DATA transfer_data[MAX_QUEUED_ISO_TRANSFERS]; // For double buffering
 } WINUSB_ISOCH_BUFFER_STRUCT;
 
-static void iso_transfer_request_completion_function(UX_TRANSFER *ux_transfer) {
+static void iso_transfer_request_completion_function (UX_TRANSFER *ux_transfer)
+{
     WINUSH_ISOCH_DATA *transfer_data = (WINUSH_ISOCH_DATA *)ux_transfer->ux_transfer_request_user_specific;
 
     // Populate the WinUSB IsoPacketDescriptors packet status for iso reads
@@ -824,8 +837,9 @@ static void iso_transfer_request_completion_function(UX_TRANSFER *ux_transfer) {
     transfer_request_completion_function(ux_transfer);
 }
 
-BOOL WinUsb_RegisterIsochBuffer(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, PUCHAR Buffer,
-                                ULONG BufferLength, PWINUSB_ISOCH_BUFFER_HANDLE IsochBufferHandle) {
+BOOL WinUsb_RegisterIsochBuffer (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, PUCHAR Buffer,
+                                 ULONG BufferLength, PWINUSB_ISOCH_BUFFER_HANDLE IsochBufferHandle)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
 
     RETURN_ON_INVALID_HANDLE(InterfaceHandle == NULL);
@@ -841,7 +855,7 @@ BOOL WinUsb_RegisterIsochBuffer(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR P
     LOCK_INTERFACE(winusb_interface);
 
     UX_INTERFACE *ux_interface = GET_UX_INTERFACE(winusb_interface);
-    UX_ENDPOINT *ux_endpoint = get_ep_from_pipeid(ux_interface, PipeID);
+    UX_ENDPOINT *ux_endpoint = get_endpoint_from_pipeid(ux_interface, PipeID);
     if (ux_endpoint == NULL) {
         SetLastError(ERROR_INVALID_PARAMETER);
         UNLOCK_INTERFACE(winusb_interface);
@@ -883,9 +897,10 @@ BOOL WinUsb_RegisterIsochBuffer(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR P
     return TRUE;
 }
 
-BOOL WinUsb_ReadIsochPipeAsap(WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length, BOOL ContinueStream,
-                              ULONG NumberOfPackets, PUSBD_ISO_PACKET_DESCRIPTOR IsoPacketDescriptors,
-                              LPOVERLAPPED Overlapped) {
+BOOL WinUsb_ReadIsochPipeAsap (WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length, BOOL ContinueStream,
+                               ULONG NumberOfPackets, PUSBD_ISO_PACKET_DESCRIPTOR IsoPacketDescriptors,
+                               LPOVERLAPPED Overlapped)
+{
     (void)ContinueStream;
     RETURN_ON_INVALID_HANDLE(BufferHandle == NULL);
     RETURN_ON_INVALID_PARAMETER(Length == 0);
@@ -973,13 +988,15 @@ BOOL WinUsb_ReadIsochPipeAsap(WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Off
     return (status == UX_SUCCESS);
 }
 
-BOOL WinUsb_WriteIsochPipeAsap(WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length, BOOL ContinueStream,
-                               LPOVERLAPPED Overlapped) {
+BOOL WinUsb_WriteIsochPipeAsap (WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length,
+                                BOOL ContinueStream, LPOVERLAPPED Overlapped)
+{
     // ReadIsoPipe code supports writes too, we just NULL out the read specific fields
     return WinUsb_ReadIsochPipeAsap(BufferHandle, Offset, Length, ContinueStream, 1, NULL, Overlapped);
 }
 
-BOOL WinUsb_UnregisterIsochBuffer(WINUSB_ISOCH_BUFFER_HANDLE IsochBufferHandle) {
+BOOL WinUsb_UnregisterIsochBuffer (WINUSB_ISOCH_BUFFER_HANDLE IsochBufferHandle)
+{
     RETURN_ON_INVALID_HANDLE(IsochBufferHandle == NULL);
 
     // Abort transfer
@@ -988,7 +1005,8 @@ BOOL WinUsb_UnregisterIsochBuffer(WINUSB_ISOCH_BUFFER_HANDLE IsochBufferHandle) 
     return TRUE;
 }
 
-BOOL WinUsb_GetPowerPolicy(WINUSB_INTERFACE_HANDLE InterfaceHandle, ULONG PolicyType, PULONG ValueLength, PVOID Value) {
+BOOL WinUsb_GetPowerPolicy (WINUSB_INTERFACE_HANDLE InterfaceHandle, ULONG PolicyType, PULONG ValueLength, PVOID Value)
+{
     BOOL status = TRUE;
 
     RETURN_ON_INVALID_HANDLE(InterfaceHandle == NULL);
@@ -1021,8 +1039,9 @@ BOOL WinUsb_GetPowerPolicy(WINUSB_INTERFACE_HANDLE InterfaceHandle, ULONG Policy
     return status;
 }
 
-BOOL WinUSB_EXT_OverWriteMaxPacketSize(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID,
-                                       PUSHORT MaximumPacketSize) {
+BOOL WinUSB_EXT_OverWriteMaxPacketSize (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID,
+                                        PUSHORT MaximumPacketSize)
+{
     WINUSB_INTERFACE_STRUCT *winusb_interface = (WINUSB_INTERFACE_STRUCT *)InterfaceHandle;
 
     RETURN_ON_INVALID_HANDLE(InterfaceHandle == NULL);
@@ -1030,8 +1049,8 @@ BOOL WinUSB_EXT_OverWriteMaxPacketSize(WINUSB_INTERFACE_HANDLE InterfaceHandle, 
     LOCK_INTERFACE(winusb_interface);
     RETURN_ON_DISCONNECTED_DEVICE(winusb_interface);
 
-    UX_INTERFACE *ux_interface = ;
-    UX_ENDPOINT *ux_endpoint = get_ep_from_pipeid(ux_interface, PipeID);
+    UX_INTERFACE *ux_interface = GET_UX_INTERFACE(winusb_interface);
+    UX_ENDPOINT *ux_endpoint = get_endpoint_from_pipeid(ux_interface, PipeID);
     if (ux_endpoint == NULL) {
         SetLastError(ERROR_INVALID_PARAMETER);
         UNLOCK_INTERFACE(winusb_interface);
@@ -1046,37 +1065,41 @@ BOOL WinUSB_EXT_OverWriteMaxPacketSize(WINUSB_INTERFACE_HANDLE InterfaceHandle, 
 }
 
 #ifndef WINUSB_DISABLE_UNIMPLEMENTED_STUBS
-BOOL WinUsb_ReadIsochPipe(WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length, PULONG FrameNumber,
-                          ULONG NumberOfPackets, PUSBD_ISO_PACKET_DESCRIPTOR IsoPacketDescriptors,
-                          LPOVERLAPPED Overlapped) {
+BOOL WinUsb_ReadIsochPipe (WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length, PULONG FrameNumber,
+                           ULONG NumberOfPackets, PUSBD_ISO_PACKET_DESCRIPTOR IsoPacketDescriptors,
+                           LPOVERLAPPED Overlapped)
+{
     // It's difficult to schedule isochronous transfers to a specific USB frame with USBX. In almost all cases
     // WinUsb_ReadIsochPipeAsap will be sufficient
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
 }
 
-BOOL WinUsb_WriteIsochPipe(WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length, PULONG FrameNumber,
-                           LPOVERLAPPED Overlapped) {
+BOOL WinUsb_WriteIsochPipe (WINUSB_ISOCH_BUFFER_HANDLE BufferHandle, ULONG Offset, ULONG Length, PULONG FrameNumber,
+                            LPOVERLAPPED Overlapped)
+{
     // It's difficult to schedule isochronous transfers to a specific USB frame with USBX. In almost all cases
     // WinUsb_WriteIsochPipeAsap will be sufficient
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
 }
 
-BOOL WinUsb_SetPipePolicy(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, ULONG PolicyType, ULONG ValueLength,
-                          PVOID Value) {
+BOOL WinUsb_SetPipePolicy (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, ULONG PolicyType, ULONG ValueLength,
+                           PVOID Value)
+{
     // Not sure if all of this is possible with USBX
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
 }
 
-BOOL WinUsb_GetPipePolicy(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, ULONG PolicyType, PULONG ValueLength,
-                          PVOID Value) {
+BOOL WinUsb_GetPipePolicy (WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID, ULONG PolicyType, PULONG ValueLength,
+                           PVOID Value)
+{
     // FIXME, we could atleast return some default valid values
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
 
-#    if (0)
+#if (0)
     // clang-format off
     // For reference, I ran this function against all endpoint types and the results are below
     Pipe: 00 : Control
@@ -1167,16 +1190,18 @@ BOOL WinUsb_GetPipePolicy(WINUSB_INTERFACE_HANDLE InterfaceHandle, UCHAR PipeID,
     OKAY : type : MAXIMUM_TRANSFER_SIZE len : 4 val : 262128
     FAIL : type : RESET_PIPE_ON_RESUME error : ERROR_INVALID_PARAMETER
     // clang-format on
-#    endif
+#endif
 }
 
-BOOL WinUsb_SetPowerPolicy(WINUSB_INTERFACE_HANDLE InterfaceHandle, ULONG PolicyType, ULONG ValueLength, PVOID Value) {
+BOOL WinUsb_SetPowerPolicy (WINUSB_INTERFACE_HANDLE InterfaceHandle, ULONG PolicyType, ULONG ValueLength, PVOID Value)
+{
     SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
     return FALSE;
 }
 #endif
 
-typedef struct {
+typedef struct
+{
     UCHAR usbx_error;
     DWORD win32_error;
 } UX_WIN32_ERROR_MAP;
@@ -1223,7 +1248,8 @@ static const UX_WIN32_ERROR_MAP error_map[] = {{UX_ERROR, ERROR_GEN_FAILURE},
                                                {UX_BUFFER_OVERFLOW, ERROR_BUFFER_OVERFLOW},
                                                {UX_NO_DEVICE_CONNECTED, ERROR_DEV_NOT_EXIST}};
 
-static DWORD ux_status_to_win32(UINT status) {
+static DWORD ux_status_to_win32 (UINT status)
+{
     for (size_t i = 0; i < sizeof(error_map) / sizeof(UX_WIN32_ERROR_MAP); i++) {
         if (error_map[i].usbx_error == status) {
             return error_map[i].win32_error;

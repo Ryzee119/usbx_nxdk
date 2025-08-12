@@ -31,6 +31,8 @@ extern "C" {
 
 typedef struct nx_usb_device {
     UX_DEVICE *ux_device;
+    UX_DEVICE_DESCRIPTOR device_descriptor;
+    UX_CONFIGURATION_DESCRIPTOR *configuration_descriptor;
     CRITICAL_SECTION lock;
 } nx_usb_device_t;
 
@@ -57,6 +59,8 @@ int nxUsbRegisterChangeCallback(void (*ux_system_host_change_function)(ULONG, UX
 int nxUsbDeviceClaim(match_device_id_t *device_ids, match_device_class_t *device_class,
                      match_interface_class_t *interface_class, nx_usb_device_t *nx_device);
 int nxUsbDeviceRelease(nx_usb_device_t *nx_device);
+void nxUsbLock(nx_usb_device_t *nx_device);
+void nxUsbUnlock(nx_usb_device_t *nx_device);
 #ifdef __cplusplus
 }
 #endif
